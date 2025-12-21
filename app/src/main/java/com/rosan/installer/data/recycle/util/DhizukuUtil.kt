@@ -8,10 +8,12 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 
 suspend fun <T> requireDhizukuPermissionGranted(action: suspend () -> T): T {
     callbackFlow {
         Dhizuku.init()
+        delay(1000) // Dhizuku.init() 之后等待一秒钟
         if (Dhizuku.isPermissionGranted()) send(Unit)
         else {
             Dhizuku.requestPermission(object : DhizukuRequestPermissionListener() {
