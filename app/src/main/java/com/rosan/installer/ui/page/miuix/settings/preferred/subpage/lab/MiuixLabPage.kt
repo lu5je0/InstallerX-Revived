@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,14 +24,15 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.rosan.installer.R
 import com.rosan.installer.build.RsConfig
-import com.rosan.installer.data.app.model.entity.HttpProfile
-import com.rosan.installer.data.app.model.entity.RootImplementation
+import com.rosan.installer.data.app.model.enums.HttpProfile
+import com.rosan.installer.data.app.model.enums.RootImplementation
 import com.rosan.installer.ui.page.main.settings.preferred.PreferredViewAction
 import com.rosan.installer.ui.page.main.settings.preferred.PreferredViewModel
 import com.rosan.installer.ui.page.miuix.widgets.MiuixBackButton
 import com.rosan.installer.ui.page.miuix.widgets.MiuixRootImplementationDialog
 import com.rosan.installer.ui.page.miuix.widgets.MiuixSettingsTipCard
 import com.rosan.installer.ui.page.miuix.widgets.MiuixSwitchWidget
+import com.rosan.installer.util.OSUtils
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -101,21 +103,6 @@ fun MiuixLabPage(
         ) {
             item { MiuixSettingsTipCard(stringResource(R.string.lab_tip)) }
             item { Spacer(modifier = Modifier.size(12.dp)) }
-            item { SmallTitle(stringResource(R.string.config_authorizer_shizuku)) }
-            item {
-                Card(
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp)
-                        .padding(bottom = 12.dp)
-                ) {
-                    MiuixSwitchWidget(
-                        title = stringResource(R.string.lab_use_hook_mode),
-                        description = stringResource(R.string.lab_use_hook_mode_desc),
-                        checked = state.labShizukuHookMode,
-                        onCheckedChange = { viewModel.dispatch(PreferredViewAction.LabChangeShizukuHookMode(it)) }
-                    )
-                }
-            }
             item { SmallTitle(stringResource(R.string.config_authorizer_root)) }
             item {
                 Card(
@@ -159,16 +146,31 @@ fun MiuixLabPage(
                             data.keys.toList().indexOf(currentRootImpl).coerceAtLeast(0)
                         }
 
-                        SuperSpinner(
-                            title = stringResource(R.string.lab_module_select_root_impl),
-                            items = spinnerEntries,
-                            selectedIndex = selectedIndex,
-                            onSelectedIndexChange = { newIndex ->
-                                data.keys.elementAtOrNull(newIndex)?.let { impl ->
-                                    viewModel.dispatch(PreferredViewAction.LabChangeRootImplementation(impl))
+                        Column {
+                            SuperSpinner(
+                                title = stringResource(R.string.lab_module_select_root_impl),
+                                items = spinnerEntries,
+                                selectedIndex = selectedIndex,
+                                onSelectedIndexChange = { newIndex ->
+                                    data.keys.elementAtOrNull(newIndex)?.let { impl ->
+                                        viewModel.dispatch(PreferredViewAction.LabChangeRootImplementation(impl))
+                                    }
                                 }
-                            }
-                        )
+                            )
+                            MiuixSwitchWidget(
+                                title = stringResource(R.string.lab_module_flashing_show_art),
+                                description = stringResource(R.string.lab_module_flashing_show_art_desc),
+                                checked = state.labRootShowModuleArt,
+                                onCheckedChange = { viewModel.dispatch(PreferredViewAction.LabChangeRootShowModuleArt(it)) }
+                            )
+                            if (OSUtils.isSystemApp)
+                                MiuixSwitchWidget(
+                                    title = stringResource(R.string.lab_module_always_use_root),
+                                    description = stringResource(R.string.lab_module_always_use_root_desc),
+                                    checked = state.labRootModuleAlwaysUseRoot,
+                                    onCheckedChange = { viewModel.dispatch(PreferredViewAction.LabChangeRootModuleAlwaysUseRoot(it)) }
+                                )
+                        }
                     }
                 }
             }

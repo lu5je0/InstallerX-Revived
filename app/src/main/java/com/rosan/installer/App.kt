@@ -10,6 +10,7 @@ import com.rosan.installer.di.init.appModules
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import timber.log.Timber
 
 class App : Application() {
@@ -17,16 +18,17 @@ class App : Application() {
         CrashHandler.init()
         super.onCreate()
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+            HiddenApiBypass.addHiddenApiExemptions("")
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             MonetCompat.setup(this)
             MonetCompat.enablePaletteCompat()
-
             MonetCompat.getInstance().updateMonetColors()
         }
 
-        if (RsConfig.LEVEL == Level.PREVIEW || RsConfig.LEVEL == Level.UNSTABLE || RsConfig.isDebug) {
+        if (RsConfig.LEVEL == Level.PREVIEW || RsConfig.LEVEL == Level.UNSTABLE || RsConfig.isDebug)
             Timber.plant(Timber.DebugTree())
-        }
 
         startKoin {
             // Koin Android Logger

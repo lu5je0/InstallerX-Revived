@@ -9,25 +9,26 @@
 
 [versions]
 agp = "8.13.2"
+biometric = "1.4.0-alpha05"
 capsule = "2.1.2"
-kotlin = "2.2.21"
-ksp = "2.3.3"
-composeBom = "2025.12.00"
+kotlin = "2.3.0"
+ksp = "2.3.4"
+composeBom = "2025.12.01"
 compose = "1.10.0"
 m3color = "2025.4"
 haze = "1.7.1"
 splashScreen = "1.2.0"
-material3 = "1.5.0-alpha10"
+material3 = "1.5.0-alpha11"
 room = "2.8.4"
 ktx-serialization = "1.9.0"
 accompanist = "0.37.3"
 rikka-shizuku = "13.1.5"
 koin-bom = "4.1.1"
 datastoreCoreAndroid = "1.2.0"
-aboutLibraries = "13.1.0"
+aboutLibraries = "13.2.1"
 appiconloader = "1.5.0"
 timber = "5.0.1"
-miuix = "0.7.1"
+miuix = "0.8.0-aedfe1b-SNAPSHOT"
 okhttp = "5.3.2"
 monetcompat = "0.4.1"
 
@@ -44,9 +45,10 @@ aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "abo
 aboutLibraries-android = { id = "com.mikepenz.aboutlibraries.plugin.android", version.ref = "aboutLibraries" }
 
 [libraries]
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-core = { group = "androidx.core", name = "core-ktx", version = "1.17.0" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.12.1" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.12.2" }
 androidx-lifecycle = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version = "2.10.0" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastoreCoreAndroid" }
 androix-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashScreen" }
@@ -76,7 +78,7 @@ ktx-serializationJson = { group = "org.jetbrains.kotlinx", name = "kotlinx-seria
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 # AndroidHiddenApiBypass
 # https://github.com/LSPosed/AndroidHiddenApiBypass
-lsposed-hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version = "6.1" }
+hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version = "6.1" }
 
 # Koin Inject
 # https://insert-koin.io/docs/setup/koin
@@ -102,7 +104,8 @@ iamr0s-dhizuku-api = { group = "io.github.iamr0s", name = "Dhizuku-API", version
 
 # AndroidAppProcess
 # https://github.com/iamr0s/AndroidAppProcess
-iamr0s-androidAppProcess = { group = "io.github.iamr0s", name = "AndroidAppProcess", version = "1.4.1" }
+# iamr0s-androidAppProcess = { group = "io.github.iamr0s", name = "AndroidAppProcess", version = "1.4.1" }
+iamr0s-androidAppProcess = { group = "com.github.wxxsfxyzm", name = "AndroidAppProcess", version = "v1.4.1-revived" }
 
 # Core module (required for accessing library data)
 aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutLibraries" }
@@ -114,6 +117,7 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 
 # miuix
 miuix = { group = "top.yukonga.miuix.kmp", name = "miuix-android", version.ref = "miuix" }
+miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
 
 # okhttp
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }

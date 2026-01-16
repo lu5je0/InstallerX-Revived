@@ -1,6 +1,5 @@
 package com.rosan.installer.ui.page.miuix.installer.sheetcontent
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -27,6 +25,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rosan.installer.R
+import com.rosan.installer.ui.theme.LocalIsDark
 import com.rosan.installer.ui.util.KeyEventBlocker
 import com.rosan.installer.ui.util.isGestureNavigation
 import top.yukonga.miuix.kmp.basic.Button
@@ -35,19 +34,21 @@ import top.yukonga.miuix.kmp.basic.CardColors
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme.isDynamicColor
 
 /**
  * A Composable that displays the real-time output of a module installation process.
  * It features a scrollable log area that automatically follows new output,
  * and a close button.
  *
+ * @param colorScheme The color scheme for the UI.
+ * @param isDarkMode Whether the UI is in dark mode.
  * @param outputLines The list of log lines to display.
  * @param isFinished Whether the installation process has completed.
  * @param onClose Lambda to be invoked when the close button is clicked.
  */
 @Composable
 fun InstallModuleContent(
-    colorScheme: ColorScheme,
     outputLines: List<String>,
     isFinished: Boolean,
     onClose: () -> Unit
@@ -65,6 +66,10 @@ fun InstallModuleContent(
         }
     }
 
+    val isDarkMode = LocalIsDark.current
+    val cardColor = if (isDynamicColor) MiuixTheme.colorScheme.surfaceContainer else
+        if (isDarkMode) Color.Black else Color.White
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -77,7 +82,7 @@ fun InstallModuleContent(
                 .heightIn(min = 300.dp)
                 .weight(1f, fill = false),
             colors = CardColors(
-                color = if (isSystemInDarkTheme()) Color.Black else Color.White,
+                color = cardColor,
                 contentColor = MiuixTheme.colorScheme.onSurface
             )
         ) {

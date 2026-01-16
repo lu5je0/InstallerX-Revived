@@ -8,13 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +22,7 @@ import com.rosan.installer.data.app.util.PackageManagerUtil
 import com.rosan.installer.ui.page.main.installer.InstallerViewAction
 import com.rosan.installer.ui.page.main.installer.InstallerViewModel
 import com.rosan.installer.ui.page.miuix.widgets.MiuixCheckboxWidget
+import com.rosan.installer.ui.theme.LocalIsDark
 import com.rosan.installer.ui.theme.miuixSheetCardColorDark
 import com.rosan.installer.ui.util.isGestureNavigation
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -36,25 +34,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme.isDynamicColor
 
 @Composable
 fun UninstallPrepareContent(
-    colorScheme: ColorScheme,
-    isDarkMode: Boolean,
     viewModel: InstallerViewModel,
     onCancel: () -> Unit,
     onUninstall: () -> Unit
 ) {
+    val isDarkMode = LocalIsDark.current
     val uninstallInfo by viewModel.uiUninstallInfo.collectAsState()
     val info = uninstallInfo ?: return
 
     val uninstallFlags by viewModel.uninstallFlags.collectAsState()
-    val keepData by remember(uninstallFlags) {
-        mutableStateOf((uninstallFlags and PackageManagerUtil.DELETE_KEEP_DATA) != 0)
-    }
-    val deleteAllUsers by remember(uninstallFlags) {
-        mutableStateOf((uninstallFlags and PackageManagerUtil.DELETE_ALL_USERS) != 0)
-    }
-    val deleteSystemApp by remember(uninstallFlags) {
-        mutableStateOf((uninstallFlags and PackageManagerUtil.DELETE_SYSTEM_APP) != 0)
-    }
+    val deleteKeepData = (uninstallFlags and PackageManagerUtil.DELETE_KEEP_DATA) != 0
+    val deleteAllUsers = (uninstallFlags and PackageManagerUtil.DELETE_ALL_USERS) != 0
+    val deleteSystemApp = (uninstallFlags and PackageManagerUtil.DELETE_SYSTEM_APP) != 0
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -74,7 +65,7 @@ fun UninstallPrepareContent(
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
             colors = CardColors(
-                color = if (isDynamicColor) colorScheme.surfaceContainer else
+                color = if (isDynamicColor) MiuixTheme.colorScheme.surfaceContainer else
                     if (isDarkMode) miuixSheetCardColorDark else Color.White,
                 contentColor = MiuixTheme.colorScheme.onSurface
             )
@@ -82,7 +73,7 @@ fun UninstallPrepareContent(
             MiuixCheckboxWidget(
                 title = stringResource(id = R.string.uninstall_keep_data),
                 description = stringResource(id = R.string.uninstall_keep_data_desc),
-                checked = keepData,
+                checked = deleteKeepData,
                 onCheckedChange = { isChecked ->
                     viewModel.dispatch(
                         InstallerViewAction.ToggleUninstallFlag(

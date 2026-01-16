@@ -56,8 +56,8 @@ import com.rosan.installer.R
 import com.rosan.installer.build.RsConfig
 import com.rosan.installer.build.model.entity.Manufacturer
 import com.rosan.installer.data.app.model.entity.AppEntity
-import com.rosan.installer.data.app.model.entity.DataType
 import com.rosan.installer.data.app.model.entity.InstalledAppInfo
+import com.rosan.installer.data.app.model.enums.DataType
 import com.rosan.installer.data.app.util.sortedBest
 import com.rosan.installer.data.installer.repo.InstallerRepo
 import com.rosan.installer.ui.icons.AppIcons
@@ -87,7 +87,7 @@ fun installInfoDialog(
     val currentPackage = installer.analysisResults.find { it.packageName == currentPackageName }
     // If there's no current package to display, return empty params.
     if (currentPackage == null) return DialogParams()
-    // The pre-install info is now directly available within our main data model.
+    // The pre-install info is now directly available within main data model.
     val preInstallAppInfo = currentPackage.installedAppInfo
     val selectableEntities = currentPackage.appEntities
 
@@ -100,8 +100,6 @@ fun installInfoDialog(
         ?: return DialogParams()
     val isModule = entityToInstall is AppEntity.ModuleEntity
 
-    // 为当前应用的所有 UI 部件创建一个唯一的 ID
-    // 确保 AnimatedContent 能够检测到内容变化
     val uniqueContentKey = "${DialogParamsType.InstallerInfo.id}_${entityToInstall.packageName}"
 
     val displayLabel: String =
@@ -282,6 +280,16 @@ fun installInfoDialog(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.basicMarquee()
                         )
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.installer_author,
+                                entityToInstall.author
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.basicMarquee(),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
 
                     else -> {}
@@ -331,6 +339,7 @@ fun installInfoDialog(
                                                     shortLabelResId = R.string.installer_package_min_sdk_label_short,
                                                     newSdk = newMinSdk,
                                                     oldSdk = preInstallAppInfo?.minSdk?.toString(),
+                                                    isUninstalled = preInstallAppInfo?.isUninstalled ?: false,
                                                     isArchived = preInstallAppInfo?.isArchived ?: false,
                                                     type = "min"
                                                 )
@@ -341,6 +350,7 @@ fun installInfoDialog(
                                                     shortLabelResId = R.string.installer_package_target_sdk_label_short,
                                                     newSdk = newTargetSdk,
                                                     oldSdk = preInstallAppInfo?.targetSdk?.toString(),
+                                                    isUninstalled = preInstallAppInfo?.isUninstalled ?: false,
                                                     isArchived = preInstallAppInfo?.isArchived ?: false,
                                                     type = "target"
                                                 )
@@ -358,6 +368,7 @@ fun installInfoDialog(
                                                     labelPrefixResId = R.string.installer_package_min_label,
                                                     newSdk = newMinSdk,
                                                     oldSdk = preInstallAppInfo?.minSdk?.toString(),
+                                                    isUninstalled = preInstallAppInfo?.isUninstalled ?: false,
                                                     isArchived = preInstallAppInfo?.isArchived ?: false,
                                                     type = "min"
                                                 )
@@ -367,6 +378,7 @@ fun installInfoDialog(
                                                     labelPrefixResId = R.string.installer_package_target_label,
                                                     newSdk = newTargetSdk,
                                                     oldSdk = preInstallAppInfo?.targetSdk?.toString(),
+                                                    isUninstalled = preInstallAppInfo?.isUninstalled ?: false,
                                                     isArchived = preInstallAppInfo?.isArchived ?: false,
                                                     type = "target"
                                                 )
@@ -420,13 +432,17 @@ private fun VersionCompareMultiLine(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val oldVersionText = when {
+            preInstallAppInfo.isArchived -> stringResource(R.string.old_version_archived)
+            preInstallAppInfo.isUninstalled -> stringResource(R.string.old_version_uninstalled)
+            else -> preInstallAppInfo.versionName
+        }
+
         Text( // Old version with prefix
             text = stringResource(R.string.old_version_prefix) +
                     stringResource(
                         R.string.installer_version_short,
-                        if (preInstallAppInfo.isArchived)
-                            stringResource(R.string.old_version_archived)
-                        else preInstallAppInfo.versionName,
+                        oldVersionText,
                         preInstallAppInfo.versionCode
                     ),
             textAlign = TextAlign.Center,
@@ -473,14 +489,16 @@ private fun VersionCompareSingleLine(
 ) {
     val isDowngrade = preInstallAppInfo.versionCode > entityToInstall.versionCode
     val color = if (isDowngrade) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    val oldVersionText = if (preInstallAppInfo.isArchived)
-        stringResource(R.string.old_version_archived)
-    else
-        stringResource(
-            R.string.installer_version_short,
-            preInstallAppInfo.versionName,
-            preInstallAppInfo.versionCode
-        )
+    val oldVersionNameContent = when {
+        preInstallAppInfo.isArchived -> stringResource(R.string.old_version_archived)
+        preInstallAppInfo.isUninstalled -> stringResource(R.string.old_version_uninstalled)
+        else -> preInstallAppInfo.versionName
+    }
+    val oldVersionText = stringResource(
+        R.string.installer_version_short,
+        oldVersionNameContent,
+        preInstallAppInfo.versionCode
+    )
     val newVersionText = stringResource(
         R.string.installer_version2,
         entityToInstall.versionName,
@@ -508,7 +526,8 @@ private fun SdkInfoCompact(
     @StringRes shortLabelResId: Int,
     newSdk: String,
     oldSdk: String?,
-    isArchived: Boolean,
+    isUninstalled: Boolean = false,
+    isArchived: Boolean = false,
     type: String
 ) {
     val newSdkInt = newSdk.toIntOrNull()
@@ -526,12 +545,12 @@ private fun SdkInfoCompact(
             val color =
                 if (isDowngrade || isIncompatible) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
 
-            val oldText = if (isArchived) {
-                stringResource(R.string.old_version_archived)
-            } else {
-                // compact: label + old number, e.g. "Min: 35"
-                stringResource(shortLabelResId, oldSdk)
+            val oldValueContent = when {
+                isArchived -> stringResource(R.string.old_version_archived)
+                isUninstalled -> stringResource(R.string.old_version_uninstalled)
+                else -> oldSdk.orEmpty()
             }
+            val oldText = stringResource(shortLabelResId, oldValueContent)
             Text(text = oldText, style = MaterialTheme.typography.bodyMedium)
 
             Icon(
@@ -572,7 +591,8 @@ private fun SdkInfoExpanded(
     @StringRes labelPrefixResId: Int,
     newSdk: String,
     oldSdk: String?,
-    isArchived: Boolean,
+    isUninstalled: Boolean = false,
+    isArchived: Boolean = false,
     type: String
 ) {
     val newSdkInt = newSdk.toIntOrNull()
@@ -597,13 +617,18 @@ private fun SdkInfoExpanded(
             Spacer(modifier = Modifier.size(4.dp))
 
             // --- Old value ---
-            if (isArchived) {
-                Text(
+            when {
+                isArchived -> Text(
                     text = stringResource(R.string.old_version_archived),
                     style = MaterialTheme.typography.bodyMedium
                 )
-            } else {
-                SdkValueWithIcon(sdk = oldSdk, color = MaterialTheme.colorScheme.onSurface)
+
+                isUninstalled -> Text(
+                    text = stringResource(R.string.old_version_uninstalled),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                else -> SdkValueWithIcon(sdk = oldSdk, color = MaterialTheme.colorScheme.onSurface)
             }
 
             Icon(

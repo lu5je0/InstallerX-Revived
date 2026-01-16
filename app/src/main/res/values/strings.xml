@@ -8,6 +8,7 @@
     <string name="agree">Agree</string>
     <string name="warning">Warning</string>
     <string name="open_source_license">Open Source License</string>
+    <string name="open_source_license_settings_description">View third-party open-source libraries and their licenses</string>
     <string name="back">Back</string>
     <string name="home">Home</string>
     <string name="config">Profiles</string>
@@ -18,6 +19,7 @@
     <string name="menu">Menu</string>
     <string name="about">About</string>
     <string name="other">Other</string>
+    <string name="performance">Performance</string>
     <string name="lab">Laboratory</string>
     <string name="lab_desc">Access experimental and developer features</string>
     <string name="about_detail">About InstallerX Revived</string>
@@ -101,13 +103,23 @@
     <string name="theme_settings_hide_launcher_icon_warning_xiaomi">For HyperOS, please allow "Autostart" and "Open new windows while running in the background" to receive dialer code!</string>
     <string name="installer_settings">Installer Settings</string>
     <string name="installer_settings_desc">Change the global settings of the installer</string>
+    <string name="uninstaller_settings">Uninstaller Settings</string>
+    <string name="uninstaller_settings_desc">Change the global settings of the uninstaller</string>
     <string name="installer_settings_global_installer">Global</string>
+    <string name="installer_settings_require_biometric_auth">Require Biometric Auth to Install</string>
+    <string name="installer_settings_require_biometric_auth_desc">Require biometric auth when installing</string>
+    <string name="uninstaller_settings_require_biometric_auth">Require Biometric Auth to Uninstall</string>
+    <string name="uninstaller_settings_require_biometric_auth_desc">Require biometric auth when uninstalling</string>
+    <string name="use_biometric_confirm_change_auth_settings">Are you sure you want to change this setting</string>
+    <string name="use_biometric_confirm_change_auth_settings_desc">To continue, please confirm this action using your device authentication</string>
     <string name="installer_settings_dialog_mode_options">Options for Dialog</string>
     <string name="installer_settings_notification_mode_options">Options for Notification</string>
     <string name="installer_settings_auto_clear_success_notification">Auto-clear notification</string>
     <string name="installer_settings_auto_clear_success_notification_desc">Auto-clear notification of successful installation</string>
     <string name="installer_settings_auto_clear_time_never">Never</string>
+    <string name="installer_settings_auto_clear_time_never_desc">Never clear install success notification</string>
     <string name="installer_settings_auto_clear_time_seconds_format">%d seconds</string>
+    <string name="installer_settings_auto_clear_time_seconds_format_desc">Clear install success notification after %d seconds</string>
     <string name="basic">Basic</string>
     <string name="disable_adb_install_verify">Disable ADB Verify</string>
     <string name="disable_adb_install_verify_desc">Disable ADB install verification, useful on some systems where a installation will trigger an scan (Play Protect)</string>
@@ -156,6 +168,7 @@
     <string name="config_authorizer_global">Global</string>
     <string name="config_authorizer_global_desc">Global (%1$s)</string>
     <string name="config_authorizer_none">None</string>
+    <string name="config_authorizer_none_system_app_tips">Running as system installer, most of the options here are not needed.</string>
     <string name="config_authorizer_none_tips">When using system installer, most of the options here are invalid.</string>
     <string name="config_authorizer_root">Root</string>
     <string name="config_authorizer_shizuku">Shizuku</string>
@@ -171,6 +184,14 @@
     <string name="config_install_mode_notification">Notification</string>
     <string name="config_install_mode_auto_notification">Auto notification</string>
     <string name="config_install_mode_ignore">Ignore</string>
+    <string name="config_customize_install_reason">Customize Install Reason</string>
+    <string name="config_customize_install_reason_desc">Specify the install reason. For new installations, selecting "User" usually triggers the launcher to create a desktop icon</string>
+    <string name="config_install_reason">Install Reason</string>
+    <string name="config_install_reason_unknown">Unknown</string>
+    <string name="config_install_reason_policy">Device Policy</string>
+    <string name="config_install_reason_device_restore">Device Restore</string>
+    <string name="config_install_reason_device_setup">Device Setup</string>
+    <string name="config_install_reason_user">User</string>
     <string name="config_customize_package_source">Customize Package Source</string>
     <string name="config_customize_package_source_desc">Specify the source of the package, Local File or Download File will face more restrictions</string>
     <string name="config_package_source">Package Source</string>
@@ -179,7 +200,12 @@
     <string name="config_package_source_store">Store</string>
     <string name="config_package_source_local_file">Local File</string>
     <string name="config_package_source_downloaded_file">Downloaded File</string>
+    <string name="config_declare_install_requester">Customize install requester</string>
+    <string name="config_declare_install_requester_desc">Defaults to the requesting app when off</string>
+    <string name="config_declare_install_requester_error_desc">The entered package name must be installed</string>
+    <string name="config_install_requester">Install requested by (package name)</string>
     <string name="config_declare_installer">Set install source</string>
+    <string name="config_declare_installer_desc">Defaults to this app when off</string>
     <string name="config_installer">installed by (package name)</string>
     <string name="config_customize_user">Set user to install</string>
     <string name="config_customize_user_desc">Manually set the user you want to install app to</string>
@@ -233,6 +259,8 @@
     <string name="config_error_name">Name can\'t be empty</string>
     <string name="config_error_customize_authorizer">Custom authorizer can\'t be empty</string>
     <string name="config_error_installer">Installer source can\'t be empty</string>
+    <string name="config_error_package_not_found">Package not found</string>
+    <string name="config_error_package_name_empty">Package name can\'t be empty</string>
     <string name="discard">Discard</string>
     <string name="confirm">Confirm</string>
     <string name="cancel">Cancel</string>
@@ -245,6 +273,9 @@
     <string name="next">Next</string>
     <string name="previous">Back</string>
     <string name="close">Close</string>
+    <string name="visit_home_page">Visit Home Page</string>
+    <string name="license">License: %s</string>
+    <string name="no_license_text">No license text available.</string>
     <string name="finish">Done</string>
     <string name="open">Open</string>
     <string name="select">Select</string>
@@ -267,6 +298,10 @@
     <string name="sort_by_selected_first">Selected go first</string>
     <string name="sort_by_show_system_app">Display system app</string>
     <string name="sort_by_show_package_name">Display package name</string>
+
+    <string name="auth_to_continue_work">Please authenticate to confirm this operation</string>
+    <string name="auth_summary_install">You are doing an install operation, To continue, please confirm this action using your device authentication</string>
+    <string name="auth_summary_uninstall">You are doing an uninstall operation, To continue, please confirm this action using your device authentication</string>
 
     <string name="installer_ready">Ready</string>
     <string name="installer_resolving">Checking…</string>
@@ -309,6 +344,7 @@
     <string name="installer_silent_install">Silent Install</string>
     <string name="installer_error_reason">Error Reason</string>
     <string name="installer_unknown_error">Unknown Error</string>
+    <string name="installer_notification_tap_to_disable">Foreground service notification, tap to disable.</string>
     <string name="installer_channel_name">Install Notification</string>
     <string name="installer_progress_channel_name">Install Process Notification</string>
     <string name="installer_background_channel_name">Background Notification</string>
@@ -323,14 +359,22 @@
     <string name="installer_live_channel_short_text_install_failed">Failed</string>
     <string name="installer_uninstall_app">Uninstall App</string>
     <string name="installer_uninstalling">Uninstalling</string>
+    <string name="uninstall_authorizer_tip">Uninstaller always use authorizer set in default profile</string>
     <string name="uninstall_keep_data">Keep Data</string>
     <string name="uninstall_keep_data_desc">App data and cache will be retained</string>
     <string name="uninstall_all_users">For All Users</string>
     <string name="uninstall_all_users_desc">Uninstall this app for all users on this device</string>
+    <string name="uninstall_all_users_disabled">Uninstall for all users was disabled</string>
     <string name="uninstall_delete_system_app">Delete SystemApp</string>
-    <string name="uninstall_delete_system_app_desc">Allow deleting system apps</string>
+    <string name="uninstall_delete_system_app_desc">Allow deleting system apps for current user</string>
+    <string name="uninstall_system_app_disabled">System app removal was disabled</string>
     <string name="uninstall_success_message">Uninstall Success</string>
     <string name="uninstall_failed_message">Uninstall Failed</string>
+    <string name="uninstall_call_uninstaller">Call uninstaller</string>
+    <string name="uninstall_call_uninstaller_manually">Call uninstaller manually</string>
+    <string name="uninstall_call_uninstaller_manually_desc">Uninstall app by given package name</string>
+    <string name="uninstall_progress_text">Uninstalling...</string>
+    <string name="uninstall_enter_package_name">Enter package name to uninstall</string>
     <string name="permission_read_external_storage">Read external storage</string>
     <string name="permission_write_external_storage">Write external storage</string>
     <string name="permission_access_fine_location">Access fine location</string>
@@ -391,6 +435,7 @@
     <string name="installer_version_code_label">Version Code:</string>
     <string name="installer_version">Version: %1$s (%2$s)</string>
     <string name="installer_version2">%1$s (%2$s)</string>
+    <string name="installer_author">Author: %1$s</string>
     <string name="installer_split_name_label">Split Name:</string>
     <string name="installer_package_name">Package: %1$s</string>
     <string name="installer_package_min_sdk_label">Min SDK:</string>
@@ -409,6 +454,7 @@
     <string name="exception_resolve_failed">Resolve URI failed</string>
     <string name="exception_resolve_failed_no_internet_access">This version cannot access Internet, to use this feature, reinstall another version</string>
     <string name="exception_analyse_failed_all_files_unsupported">File not supported</string>
+    <string name="exception_authentication_failed">User authentication failed</string>
     <string name="exception_install_failed_already_exists">This app version is already installed, please uninstall and try again</string>
     <string name="exception_install_failed_blacklisted_package">You don\'t allow installation of the app!</string>
     <string name="exception_install_failed_invalid_apk">This app version is already installed, please uninstall and try again</string>
@@ -464,6 +510,7 @@
     <string name="exception_http_restricted_for_localhost">Cleartext HTTP restricted to localhost</string>
     <string name="old_version_prefix">Current</string>
     <string name="old_version_archived">Archived</string>
+    <string name="old_version_uninstalled">Uninstalled</string>
     <string name="upgrade_version_prefix">Upgrade</string>
     <string name="downgrade_version_prefix">Downgrade</string>
     <string name="install_choice">Select Package</string>
@@ -624,10 +671,14 @@
     <string name="suggestion_retry_install_desc">Try install again</string>
 
     <string name="lab_tip">Experimental features in the lab may be unstable or risky and could change or be removed at any time. Use at your own risk</string>
-    <string name="lab_use_hook_mode">Use hook mode</string>
-    <string name="lab_use_hook_mode_desc">Use hook mode instead of userService to get better performance</string>
+    <string name="lab_use_hook_mode">Use BinderWrapper mode</string>
+    <string name="lab_use_hook_mode_desc">Use BinderWrapper instead of UserService to get better performance, works both for Shizuku and Root</string>
     <string name="lab_module_flashing">Enable module flashing</string>
     <string name="lab_module_flashing_desc">Always check twice before flashing any modules!</string>
+    <string name="lab_module_flashing_show_art">Display ASCII art</string>
+    <string name="lab_module_flashing_show_art_desc">Display InstallerX ASCII art when installation starts"</string>
+    <string name="lab_module_always_use_root">Always use root to flash modules</string>
+    <string name="lab_module_always_use_root_desc">While working as system installer, always use root to flash modules to get best performance</string>
     <string name="lab_module_select_root_impl">Choose root implementation</string>
     <string name="lab_http_save_file">Save downloaded files</string>
     <string name="lab_http_save_file_desc">Save files to the Downloads folder after download is complete</string>
@@ -637,6 +688,6 @@
     <string name="lab_http_profile_local">Allow local cleartext (Localhost)</string>
     <string name="lab_http_profile_all">Allow all (Insecure)</string>
     <string name="lab_unstable_features">Unstable features</string>
-    <string name="lab_set_install_requester">Set install Requester</string>
-    <string name="lab_set_install_requester_desc">Fill originatingUid field with caller package to match system behavior</string>
+    <string name="lab_set_install_requester">Set Install Requester</string>
+    <string name="lab_set_install_requester_desc">Fill OriginatingUid field with caller package to match system behavior</string>
 </resources>

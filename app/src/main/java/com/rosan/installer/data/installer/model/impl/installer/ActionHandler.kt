@@ -5,12 +5,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.system.Os
+import com.rosan.installer.R
 import com.rosan.installer.data.app.model.entity.AnalyseExtraEntity
 import com.rosan.installer.data.app.model.entity.AppEntity
 import com.rosan.installer.data.app.model.entity.InstallExtraInfoEntity
 import com.rosan.installer.data.app.model.entity.PackageAnalysisResult
-import com.rosan.installer.data.app.model.entity.SessionMode
+import com.rosan.installer.data.app.model.enums.SessionMode
 import com.rosan.installer.data.app.model.exception.AnalyseFailedAllFilesUnsupportedException
+import com.rosan.installer.data.app.model.exception.AuthenticationFailedException
 import com.rosan.installer.data.app.model.impl.AnalyserRepoImpl
 import com.rosan.installer.data.app.util.IconColorExtractor
 import com.rosan.installer.data.app.util.sourcePath
@@ -27,8 +29,9 @@ import com.rosan.installer.data.installer.repo.InstallerRepo
 import com.rosan.installer.data.recycle.model.impl.PrivilegedManager
 import com.rosan.installer.data.settings.model.datastore.AppDataStore
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
-import com.rosan.installer.data.settings.util.ConfigUtil
 import com.rosan.installer.ui.activity.InstallerActivity
+import com.rosan.installer.ui.util.doBiometricAuthOrThrow
+import com.rosan.installer.util.OSUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +69,7 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
     // Helper property to get ID for logging
     private val installerId get() = installer.id
 
-    // Components
+    // Cache directory
     private val cacheDirectory = "${context.externalCacheDir?.absolutePath}/$installerId".apply { File(this).mkdirs() }
 
     // Initializing helpers without passing ID
@@ -164,7 +167,7 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
         when (action) {
             is InstallerRepoImpl.Action.ResolveInstall -> resolve(action.activity)
             is InstallerRepoImpl.Action.Analyse -> analyse()
-            is InstallerRepoImpl.Action.Install -> handleSingleInstall()
+            is InstallerRepoImpl.Action.Install -> handleSingleInstall(action.triggerAuth)
             is InstallerRepoImpl.Action.InstallMultiple -> handleMultiInstall()
             is InstallerRepoImpl.Action.ResolveUninstall -> resolveUninstall(action.activity, action.packageName)
             is InstallerRepoImpl.Action.Uninstall -> uninstall(action.packageName)
@@ -178,6 +181,8 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
                 )
                 installer.progress.emit(ProgressEntity.Finish)
             }
+            // Handle Reboot Action
+            is InstallerRepoImpl.Action.Reboot -> handleReboot(action.reason)
             // Cancel and Finish are handled in the collector directly
             is InstallerRepoImpl.Action.Cancel,
             is InstallerRepoImpl.Action.Finish -> {
@@ -283,12 +288,47 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
         installer.progress.emit(ProgressEntity.InstallAnalysedSuccess)
     }
 
-    private suspend fun handleSingleInstall() {
+    /**
+     * Requests the user to perform biometric authentication.
+     *
+     * This function displays the biometric prompt to the user (fingerprint, face, device credential,
+     * or other supported biometrics) and suspends until the user successfully authenticates.
+     * The prompt's subtitle changes depending on whether this is for an install or uninstall action.
+     *
+     * @param isInstall `true` if authentication is for an install operation, `false` for uninstall.
+     *
+     * @throws AuthenticationFailedException Thrown if the user fails or cancels biometric authentication.
+     */
+    private suspend fun requestUserBiometricAuthentication(
+        isInstall: Boolean
+    ) {
+        val requireBiometricAuth =
+            if (isInstall) appDataStore.getBoolean(AppDataStore.INSTALLER_REQUIRE_BIOMETRIC_AUTH, false).first()
+            else appDataStore.getBoolean(AppDataStore.UNINSTALLER_REQUIRE_BIOMETRIC_AUTH, false).first()
+
+        if (!requireBiometricAuth) return
+
+        return context.doBiometricAuthOrThrow(
+            title = context.getString(R.string.auth_to_continue_work),
+            subTitle = context.getString(
+                if (isInstall)
+                    R.string.auth_summary_install
+                else
+                    R.string.auth_summary_uninstall
+            )
+        )
+    }
+
+    private suspend fun handleSingleInstall(triggerAuth: Boolean) {
+        if (triggerAuth) {
+            requestUserBiometricAuthentication(true)
+        }
         installer.moduleLog = emptyList()
         performInstallLogic()
     }
 
     private suspend fun handleMultiInstall() {
+        requestUserBiometricAuthentication(true)
         val queue = installer.multiInstallQueue
         if (queue.isEmpty()) return
 
@@ -362,7 +402,13 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
         installer.progress.emit(ProgressEntity.InstallCompleted(installer.multiInstallResults.toList()))
     }
 
-    // 辅助方法：从全量结果中提取单个安装项
+    /**
+     * Finds the [PackageAnalysisResult] for a given [SelectInstallEntity].
+     * Returns null if not found.
+     * @param target The [SelectInstallEntity] to search for.
+     * @param allResults The list of [PackageAnalysisResult] to search in.
+     * @return The [PackageAnalysisResult] if found, null otherwise.
+     */
     private fun findResultForEntity(
         target: SelectInstallEntity,
         allResults: List<PackageAnalysisResult>
@@ -370,6 +416,9 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
         return allResults.find { it.packageName == target.app.packageName }
     }
 
+    /**
+     * Performs the installation logic.
+     */
     private suspend fun performInstallLogic() {
         Timber.d("[id=$installerId] install: Starting installation process via InstallationProcessor.")
         installationProcessor.install(installer.config, installer.analysisResults, cacheDirectory)
@@ -386,7 +435,7 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
 
     private suspend fun resolveConfirm(activity: Activity, sessionId: Int) {
         Timber.d("[id=$installerId] resolveConfirmInstall: Starting for session $sessionId.")
-        installer.config.authorizer = ConfigUtil.getGlobalAuthorizer()
+        installer.config = ConfigResolver.resolve(activity)
 
         val details = sessionProcessor.getSessionDetails(sessionId, installer.config)
         installer.confirmationDetails.value = details
@@ -415,7 +464,7 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
                 packageName,
                 pm.getApplicationLabel(appInfo).toString(),
                 pInfo.versionName,
-                if (Build.VERSION.SDK_INT >= 28) pInfo.longVersionCode else pInfo.versionCode.toLong(),
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode else pInfo.versionCode.toLong(),
                 icon,
                 color
             )
@@ -425,6 +474,7 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
     }
 
     private suspend fun uninstall(packageName: String) {
+        requestUserBiometricAuthentication(false)
         Timber.d("[id=$installerId] uninstall: Starting for $packageName. Emitting ProgressEntity.Uninstalling.")
         installer.progress.emit(ProgressEntity.Uninstalling)
 
@@ -435,6 +485,35 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
         )
         Timber.d("[id=$installerId] uninstall: Succeeded for $packageName. Emitting ProgressEntity.UninstallSuccess.")
         installer.progress.emit(ProgressEntity.UninstallSuccess)
+    }
+
+    private suspend fun handleReboot(reason: String) {
+        Timber.d("[id=$installerId] handleReboot: Starting cleanup before reboot.")
+        val systemUseRoot = OSUtils.isSystemApp && appDataStore.getBoolean(AppDataStore.LAB_MODULE_ALWAYS_ROOT, false).first()
+        if (systemUseRoot) installer.config.authorizer = ConfigEntity.Authorizer.Root
+        // Execute cleanup immediately
+        // Call clearCache() explicitly to ensure temporary files are removed
+        // before the system goes down
+        clearCache()
+
+        Timber.d("[id=$installerId] handleReboot: Cleanup finished. Executing reboot command.")
+
+        // Execute the reboot command
+        withContext(Dispatchers.IO) {
+            val cmd = if (reason == "recovery") {
+                // KEYCODE_POWER = 26. Hides incorrect "Factory data reset" message in recovery
+                "input keyevent 26 ; svc power reboot $reason || reboot $reason"
+            } else {
+                val reasonArg = if (reason.isNotEmpty()) " $reason" else ""
+                "svc power reboot$reasonArg || reboot$reasonArg"
+            }
+
+            val commandArray = arrayOf("sh", "-c", cmd)
+
+            PrivilegedManager.execArr(installer.config, commandArray)
+        }
+
+        installer.progress.emit(ProgressEntity.Finish)
     }
 
     private fun resetState() {
@@ -458,6 +537,9 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
         }
     }
 
+    /**
+     * * Automatically locks the default installer if enabled.
+     */
     private fun autoLockInstallerIfNeeded() {
         scope.launch {
             if (appDataStore.getBoolean(AppDataStore.AUTO_LOCK_INSTALLER).first()) {

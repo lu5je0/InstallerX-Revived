@@ -33,6 +33,7 @@ import com.rosan.installer.ui.page.miuix.widgets.MiuixIgnoreBatteryOptimizationS
 import com.rosan.installer.ui.page.miuix.widgets.MiuixNavigationItemWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixSettingsAboutItemWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixSettingsTipCard
+import com.rosan.installer.util.OSUtils
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -130,9 +131,22 @@ fun MiuixPreferredPage(
                             navController.navigate(MiuixSettingsScreen.MiuixInstallerGlobal.route)
                         }
                     )
+                    MiuixNavigationItemWidget(
+                        icon = AppIcons.InstallMode,
+                        title = stringResource(R.string.uninstaller_settings),
+                        description = stringResource(R.string.uninstaller_settings_desc),
+                        onClick = {
+                            navController.navigate(MiuixSettingsScreen.MiuixUninstallerGlobal.route)
+                        }
+                    )
                 }
             }
-            if (viewModel.state.authorizer == ConfigEntity.Authorizer.None) item { MiuixSettingsTipCard(stringResource(R.string.config_authorizer_none_tips)) }
+            if (viewModel.state.authorizer == ConfigEntity.Authorizer.None)
+                item {
+                    val tip = if (OSUtils.isSystemApp) stringResource(R.string.config_authorizer_none_system_app_tips)
+                    else stringResource(R.string.config_authorizer_none_tips)
+                    MiuixSettingsTipCard(text = tip)
+                }
             item { SmallTitle(stringResource(R.string.basic)) }
             item {
                 Card(

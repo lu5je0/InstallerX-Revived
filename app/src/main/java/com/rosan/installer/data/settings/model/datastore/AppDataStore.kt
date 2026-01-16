@@ -32,6 +32,12 @@ class AppDataStore(
         // Show Live Activity
         val SHOW_LIVE_ACTIVITY = booleanPreferencesKey("show_live_activity")
 
+        // Use Biometric Auth Install
+        val INSTALLER_REQUIRE_BIOMETRIC_AUTH = booleanPreferencesKey("installer_use_biometric_auth")
+
+        // Use Biometric Auth Uninstall
+        val UNINSTALLER_REQUIRE_BIOMETRIC_AUTH = booleanPreferencesKey("uninstaller_use_biometric_auth")
+
         // Show Launcher Icon
         val SHOW_LAUNCHER_ICON = booleanPreferencesKey("show_launcher_icon")
 
@@ -49,6 +55,7 @@ class AppDataStore(
         val AUTHORIZER = stringPreferencesKey("authorizer")
         val CUSTOMIZE_AUTHORIZER = stringPreferencesKey("customize_authorizer")
         val INSTALL_MODE = stringPreferencesKey("install_mode")
+        val UNINSTALL_FLAGS = intPreferencesKey("uninstall_flags")
 
         // ApplyViewModel
         val USER_READ_SCOPE_TIPS = booleanPreferencesKey("user_read_scope_tips")
@@ -87,8 +94,9 @@ class AppDataStore(
             stringPreferencesKey("managed_shared_user_id_blacklist_exempted_packages_list")
 
         // Lab
-        val LAB_USE_SHIZUKU_HOOK_MODE = booleanPreferencesKey("use_shizuku_hook_mode")
         val LAB_ENABLE_MODULE_FLASH = booleanPreferencesKey("enable_module_flash")
+        val LAB_MODULE_FLASH_SHOW_ART = booleanPreferencesKey("module_flash_show_art")
+        val LAB_MODULE_ALWAYS_ROOT = booleanPreferencesKey("module_always_root")
         val LAB_ROOT_IMPLEMENTATION = stringPreferencesKey("lab_root_implementation")
         val LAB_HTTP_PROFILE = stringPreferencesKey("lab_http_profile")
         val LAB_HTTP_SAVE_FILE = booleanPreferencesKey("lab_http_save_file")
@@ -99,25 +107,22 @@ class AppDataStore(
         dataStore.edit { it[key] = value }
     }
 
-    fun getString(key: Preferences.Key<String>, default: String = ""): Flow<String> {
-        return dataStore.data.map { it[key] ?: default }
-    }
+    fun getString(key: Preferences.Key<String>, default: String = ""): Flow<String> =
+        dataStore.data.map { it[key] ?: default }
 
     suspend fun putInt(key: Preferences.Key<Int>, value: Int) {
         dataStore.edit { it[key] = value }
     }
 
-    fun getInt(key: Preferences.Key<Int>, default: Int = 0): Flow<Int> {
-        return dataStore.data.map { it[key] ?: default }
-    }
+    fun getInt(key: Preferences.Key<Int>, default: Int = 0): Flow<Int> =
+        dataStore.data.map { it[key] ?: default }
 
     suspend fun putBoolean(key: Preferences.Key<Boolean>, value: Boolean) {
         dataStore.edit { it[key] = value }
     }
 
-    fun getBoolean(key: Preferences.Key<Boolean>, default: Boolean = false): Flow<Boolean> {
-        return dataStore.data.map { it[key] ?: default }
-    }
+    fun getBoolean(key: Preferences.Key<Boolean>, default: Boolean = false): Flow<Boolean> =
+        dataStore.data.map { it[key] ?: default }
 
     /**
      * Saves a list of NamedPackage objects to DataStore after converting it to a JSON string.
@@ -182,4 +187,16 @@ class AppDataStore(
                 emptyList()
             }
         }
+
+    /**
+     * Updates the uninstall flags in DataStore using the provided transform function.
+     * @param transform A function that takes the current uninstall flags and returns a new set of flags.
+     * @return A Flow emitting the updated uninstall flags.
+     */
+    suspend fun updateUninstallFlags(transform: (Int) -> Int) {
+        dataStore.edit { preferences ->
+            val current = preferences[UNINSTALL_FLAGS] ?: 0
+            preferences[UNINSTALL_FLAGS] = transform(current)
+        }
+    }
 }

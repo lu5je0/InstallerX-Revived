@@ -7,9 +7,9 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.provider.Settings
 import androidx.core.net.toUri
-import com.rosan.installer.data.app.model.entity.DataType
 import com.rosan.installer.data.app.model.entity.InstallEntity
 import com.rosan.installer.data.app.model.entity.InstallExtraInfoEntity
+import com.rosan.installer.data.app.model.enums.DataType
 import com.rosan.installer.data.app.model.exception.InstallFailedMissingInstallPermissionException
 import com.rosan.installer.data.app.repo.InstallerRepo
 import com.rosan.installer.data.app.util.PackageManagerUtil
@@ -141,7 +141,7 @@ object NoneInstallerRepoImpl : InstallerRepo, KoinComponent {
             val receiver = IBinderInstallerRepoImpl.LocalIntentReceiver()
 
             // Request uninstallation using the standard API
-            // This will likely trigger a system dialog asking the user to confirm uninstallation
+            // This will trigger a system dialog asking the user to confirm uninstallation
             packageInstaller.uninstall(packageName, receiver.getIntentSender())
 
             // Block and wait for the result verification
@@ -152,5 +152,9 @@ object NoneInstallerRepoImpl : InstallerRepo, KoinComponent {
         result.onFailure {
             throw it
         }
+    }
+
+    override suspend fun approveSession(config: ConfigEntity, sessionId: Int, granted: Boolean) {
+        throw UnsupportedOperationException("Session Approve is not supported in None authorizer")
     }
 }

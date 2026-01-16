@@ -21,9 +21,9 @@ import android.os.ServiceManager
 import com.rosan.dhizuku.api.Dhizuku
 import com.rosan.installer.BuildConfig
 import com.rosan.installer.build.model.entity.Architecture
-import com.rosan.installer.data.app.model.entity.DataType
 import com.rosan.installer.data.app.model.entity.InstallEntity
 import com.rosan.installer.data.app.model.entity.InstallExtraInfoEntity
+import com.rosan.installer.data.app.model.enums.DataType
 import com.rosan.installer.data.app.model.exception.InstallFailedBlacklistedPackageException
 import com.rosan.installer.data.app.repo.InstallerRepo
 import com.rosan.installer.data.app.util.InstallOption
@@ -32,14 +32,12 @@ import com.rosan.installer.data.app.util.PackageInstallerUtil.installFlags
 import com.rosan.installer.data.app.util.PackageManagerUtil
 import com.rosan.installer.data.app.util.sourcePath
 import com.rosan.installer.data.common.util.isPackageArchivedCompat
+import com.rosan.installer.data.recycle.model.impl.PrivilegedManager
 import com.rosan.installer.data.recycle.util.requireDhizukuPermissionGranted
 import com.rosan.installer.data.recycle.util.useUserService
 import com.rosan.installer.data.reflect.repo.ReflectRepo
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
-import com.rosan.installer.util.isSystemInstaller
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.rosan.installer.util.OSUtils
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -51,8 +49,6 @@ import java.util.concurrent.TimeUnit
 abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
     private val context by inject<Context>()
     private val reflect = get<ReflectRepo>()
-
-    private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     protected abstract suspend fun iBinderWrapper(iBinder: IBinder): IBinder
 
@@ -81,10 +77,9 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
         val iPackageInstaller =
             IPackageInstaller.Stub.asInterface(iBinderWrapper(iPackageManager.packageInstaller.asBinder()))
 
-        val installerPackageName = when {
-            context.isSystemInstaller() -> context.packageName
-            config.authorizer == ConfigEntity.Authorizer.Dhizuku -> getDhizukuComponentName()
-            config.authorizer == ConfigEntity.Authorizer.None -> BuildConfig.APPLICATION_ID
+        val installerPackageName = when (config.authorizer) {
+            ConfigEntity.Authorizer.Dhizuku -> getDhizukuComponentName()
+            ConfigEntity.Authorizer.None -> if (OSUtils.isSystemApp) context.packageName else BuildConfig.APPLICATION_ID
             else -> config.installer ?: BuildConfig.APPLICATION_ID
         }
 
@@ -113,7 +108,7 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
             )) as PackageInstaller
     }
 
-    private suspend fun getDhizukuComponentName(): String? =
+    private suspend fun getDhizukuComponentName(): String =
         requireDhizukuPermissionGranted {
             Dhizuku.getOwnerPackageName()
         }
@@ -125,6 +120,41 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
         field.set(
             session, IPackageInstallerSession.Stub.asInterface(iBinderWrapper(iBinder))
         )
+    }
+
+    override suspend fun approveSession(
+        config: ConfigEntity,
+        sessionId: Int,
+        granted: Boolean
+    ) {
+        val iPackageManager =
+            IPackageManager.Stub.asInterface(iBinderWrapper(ServiceManager.getService("package")))
+
+        val iPackageInstaller =
+            IPackageInstaller.Stub.asInterface(iBinderWrapper(iPackageManager.packageInstaller.asBinder()))
+
+        try {
+            Timber.d("Approving session $sessionId (granted: $granted) via Binder wrapper")
+
+            reflect.getDeclaredMethod(
+                IPackageInstaller::class.java,
+                "setPermissionsResult",
+                Int::class.java,
+                Boolean::class.java
+            )!!.invoke(iPackageInstaller, sessionId, granted)
+
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to approve session via Binder")
+
+            if (!granted) {
+                try {
+                    iPackageInstaller.abandonSession(sessionId)
+                    Timber.d("Fallback: Session $sessionId abandoned.")
+                } catch (_: Exception) {
+                }
+            }
+            throw e
+        }
     }
 
     override suspend fun doInstallWork(
@@ -163,7 +193,7 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
         val flags = config.uninstallFlags
         val versionedPackage = VersionedPackage(packageName, PackageManager.VERSION_CODE_HIGHEST)
         val callerPackageName = when (config.authorizer) {
-            ConfigEntity.Authorizer.Dhizuku -> getDhizukuComponentName() ?: context.packageName
+            ConfigEntity.Authorizer.Dhizuku -> getDhizukuComponentName()
             else -> context.packageName
         }
 
@@ -251,6 +281,12 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
             )
         config.callingFromUid?.let { params.setOriginatingUid(it) }
         params.setAppPackageName(packageName)
+        // Customize Install Reason
+        if (config.enableCustomizeInstallReason) {
+            Timber.d("Setting installReason to ${config.installReason.name} (${config.installReason.value})")
+            params.setInstallReason(config.installReason.value)
+        } else
+            params.setInstallReason(PackageManager.INSTALL_REASON_UNKNOWN)
         // --- Customize PackageSource ---
         // Only available on Android 13+, Dhizuku need test
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && config.authorizer != ConfigEntity.Authorizer.Dhizuku) {
@@ -355,53 +391,6 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
         PackageManagerUtil.installResultVerify(context, receiver)
     }
 
-    /**
-     * Performs dex-optimization on a given package using the specified compiler filter.
-     * This is done via reflection on the hidden IPackageManager API.
-     *
-     * @param packageName The package to be optimized.
-     * @param compilerFilter The dex2oat compiler filter (e.g., "speed", "speed-profile").
-     * @param force Whether to force recompilation even if the system thinks it's unnecessary.
-     */
-    private suspend fun performDexOpt(
-        packageName: String,
-        compilerFilter: String,
-        force: Boolean
-    ) {
-        Timber.tag("performDexOpt").d("Attempting to run dex2oat for $packageName with filter $compilerFilter")
-        try {
-            val iPackageManager = IPackageManager.Stub.asInterface(iBinderWrapper(ServiceManager.getService("package")))
-
-            val method = reflect.getDeclaredMethod(
-                iPackageManager::class.java,
-                "performDexOptMode",
-                String::class.java,    // packageName
-                Boolean::class.java,   // checkProfiles
-                String::class.java,    // targetCompilerFilter
-                Boolean::class.java,   // force
-                Boolean::class.java,   // bootComplete
-                String::class.java     // splitName
-            ) ?: throw NoSuchMethodException("performDexOptMode not found in ${iPackageManager::class.java.name}")
-
-            method.isAccessible = true
-
-            val result = method.invoke(
-                iPackageManager,
-                packageName,
-                false,           // checkProfiles (set to false to ignore profile checks)
-                compilerFilter,  // targetCompilerFilter
-                force,           // force
-                true,            // bootComplete
-                null             // splitName (null for base APK)
-            ) as Boolean
-
-            Timber.tag("performDexOpt").i("Dispatching dex2oat for $packageName successful: $result")
-        } catch (e: Exception) {
-            // Catch all possible Exceptions (NoSuchMethodException, SecurityException, etc.)
-            Timber.tag("performDexOpt").e(e, "Failed to perform dex-opt for $packageName")
-        }
-    }
-
     open suspend fun doFinishWork(
         config: ConfigEntity,
         entities: List<InstallEntity>,
@@ -410,40 +399,31 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
     ) {
         Timber.tag("doFinishWork").d("isSuccess: ${result.isSuccess}")
         if (result.isSuccess) {
-            // Trigger dex optimization after installation
-            if (config.enableManualDexopt) {
-                val packageName = entities.firstOrNull()?.packageName
-                if (packageName != null) {
-                    Timber.tag("doFinishWork")
-                        .d("Manual dexopt is enabled. Triggering with mode: ${config.dexoptMode.value}")
-                    coroutineScope.launch {
-                        performDexOpt(
-                            packageName = packageName,
-                            compilerFilter = config.dexoptMode.value,
-                            force = config.forceDexopt
-                        )
-                    }
-                }
-            }
+            Timber.tag("doFinishWork").d("isSuccess: ${result.isSuccess}")
+            if (!result.isSuccess) return
 
-            val isDeleteCapable = entities.firstOrNull()?.sourceType != DataType.MULTI_APK_ZIP &&
-                    entities.firstOrNull()?.sourceType != DataType.MIXED_MODULE_APK &&
-                    entities.firstOrNull()?.sourceType != DataType.MIXED_MODULE_ZIP
-            // Never Delete ZIP files automatically
-            // Enable autoDelete only when the sourceType is capable
-            if (config.autoDelete && isDeleteCapable) {
-                Timber.tag("doFinishWork").d("autoDelete is enabled, do delete work")
-                // Improve logging for better debugging
-                coroutineScope.launch {
-                    runCatching {
-                        Timber.tag("doFinishWork").d("Attempting to call onDeleteWork.")
-                        onDeleteWork(config, entities, extraInfo)
-                        Timber.tag("doFinishWork").d("onDeleteWork call completed successfully.")
-                    }.onFailure { e ->
-                        Timber.tag("doFinishWork").e(e, "onDeleteWork failed with an exception.")
-                    }
-                }
-            }
+            val packageName = entities.firstOrNull()?.packageName ?: return
+
+            val isDeleteCapable = entities.firstOrNull()?.sourceType !in listOf(
+                DataType.MULTI_APK_ZIP,
+                DataType.MIXED_MODULE_APK,
+                DataType.MIXED_MODULE_ZIP
+            )
+
+            val shouldDelete = config.autoDelete && isDeleteCapable
+
+            PrivilegedManager.executePostInstallTasksAsync(
+                authorizer = config.authorizer,
+                customizeAuthorizer = config.customizeAuthorizer,
+                config = PrivilegedManager.PostInstallTaskConfig(
+                    packageName = packageName,
+                    enableDexopt = config.enableManualDexopt,
+                    dexoptMode = config.dexoptMode.value,
+                    forceDexopt = config.forceDexopt,
+                    enableAutoDelete = shouldDelete,
+                    deletePaths = if (shouldDelete) entities.sourcePath() else emptyArray()
+                )
+            )
         }
     }
 
@@ -460,7 +440,7 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
             special = if (authorizer == ConfigEntity.Authorizer.None
                 || authorizer == ConfigEntity.Authorizer.Dhizuku
             ) ::special else null,
-            useShizukuHookMode = false
+            useHookMode = false
         ) {
             it.privileged.delete(entities.sourcePath())
         }
@@ -486,19 +466,6 @@ abstract class IBinderInstallerRepoImpl : InstallerRepo, KoinComponent {
                 options: Bundle?
             ) {
                 queue.offer(intent, 5, TimeUnit.SECONDS)
-            }
-
-            fun send(
-                code: Int,
-                intent: Intent?,
-                resolvedType: String?,
-                finishedReceiver: IIntentReceiver?,
-                requiredPermission: String?,
-                options: Bundle?
-            ) {
-                send(
-                    code, intent, resolvedType, null, finishedReceiver, requiredPermission, options
-                )
             }
         }
 

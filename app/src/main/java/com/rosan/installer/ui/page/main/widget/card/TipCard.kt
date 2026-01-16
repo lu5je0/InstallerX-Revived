@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.rosan.installer.R
@@ -35,19 +36,26 @@ import com.rosan.installer.ui.page.main.settings.config.all.AllViewModel
  * This is typically a Row with an Icon and Text.
  * @param actionContent The composable slot for action buttons, typically aligned to the end.
  * It's within a ColumnScope, so modifiers like `align` are allowed.
+ * @param noPadding Don't add more padding in internal
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TipCard(
     modifier: Modifier = Modifier,
     cardShape: RoundedCornerShape = RoundedCornerShape(16.dp),
+    noPadding: Boolean = false,
     tipContent: @Composable () -> Unit,
-    actionContent: @Composable ColumnScope.() -> Unit
+    actionContent: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = if (noPadding) {
+            modifier
+                .fillMaxWidth()
+        } else {
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f)
         ),
@@ -109,20 +117,27 @@ fun ScopeTipCard(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun NoneInstallerTipCard() {
+fun InfoTipCard(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = AppIcons.Tip,
+    noPadding: Boolean = false
+) {
     TipCard(
+        modifier = modifier,
+        noPadding = noPadding,
         tipContent = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = AppIcons.Tip,
+                    imageVector = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onTertiary
                 )
                 Text(
-                    text = stringResource(R.string.config_authorizer_none_tips),
+                    text = text,
                     style = MaterialTheme.typography.bodyMediumEmphasized,
                     color = MaterialTheme.colorScheme.onTertiary
                 )

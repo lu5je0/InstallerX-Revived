@@ -22,7 +22,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.rosan.installer.R
-import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
 import com.rosan.installer.ui.page.main.settings.config.edit.EditViewAction
 import com.rosan.installer.ui.page.main.settings.config.edit.EditViewEvent
 import com.rosan.installer.ui.page.main.settings.config.edit.EditViewModel
@@ -38,6 +37,7 @@ import com.rosan.installer.ui.page.miuix.widgets.MiuixDataDeclareInstallerWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataDescriptionWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataForAllUserWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataInstallModeWidget
+import com.rosan.installer.ui.page.miuix.widgets.MiuixDataInstallRequesterWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataManualDexoptWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataNameWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataPackageSourceWidget
@@ -45,8 +45,10 @@ import com.rosan.installer.ui.page.miuix.widgets.MiuixDataSplitChooseAllWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDataUserWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDisplaySdkWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixDisplaySizeWidget
+import com.rosan.installer.ui.page.miuix.widgets.MiuixInstallReasonWidget
 import com.rosan.installer.ui.page.miuix.widgets.MiuixSettingsTipCard
 import com.rosan.installer.ui.page.miuix.widgets.MiuixUnsavedChangesDialog
+import com.rosan.installer.ui.util.isNoneActive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -63,8 +65,8 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Cancel
-import top.yukonga.miuix.kmp.icon.icons.useful.Confirm
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -110,12 +112,6 @@ fun MiuixEditPage(
     val stateAuthorizer = viewModel.state.data.authorizer
     val globalAuthorizer = viewModel.globalAuthorizer
 
-    val isNone = when (stateAuthorizer) {
-        ConfigEntity.Authorizer.None -> true
-        ConfigEntity.Authorizer.Global -> globalAuthorizer == ConfigEntity.Authorizer.None
-        else -> false
-    }
-
     LaunchedEffect(Unit) {
         viewModel.eventFlow.collectLatest { event ->
             when (event) {
@@ -147,7 +143,7 @@ fun MiuixEditPage(
                 navigationIcon = {
                     MiuixBackButton(
                         modifier = Modifier.padding(start = 16.dp),
-                        icon = MiuixIcons.Useful.Cancel,
+                        icon = MiuixIcons.Regular.Close,
                         onClick = { navController.navigateUp() }
                     )
                 },
@@ -157,7 +153,7 @@ fun MiuixEditPage(
                         onClick = { viewModel.dispatch(EditViewAction.SaveData) },
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.Useful.Confirm,
+                            imageVector = MiuixIcons.Regular.Ok,
                             contentDescription = stringResource(R.string.save)
                         )
                     }
@@ -191,7 +187,8 @@ fun MiuixEditPage(
                     MiuixDataInstallModeWidget(viewModel = viewModel)
                 }
             }
-            if (isNone) item { MiuixSettingsTipCard(stringResource(R.string.config_authorizer_none_tips)) }
+            if (isNoneActive(stateAuthorizer, globalAuthorizer))
+                item { MiuixSettingsTipCard(stringResource(R.string.config_authorizer_none_tips)) }
             item { SmallTitle(stringResource(R.string.config_label_installer_settings)) }
             item {
                 Card(
@@ -200,7 +197,10 @@ fun MiuixEditPage(
                         .padding(bottom = 12.dp)
                 ) {
                     MiuixDataUserWidget(viewModel = viewModel)
+                    MiuixInstallReasonWidget(viewModel = viewModel)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) MiuixDataPackageSourceWidget(viewModel = viewModel)
+                    if (viewModel.state.isCustomInstallRequesterEnabled)
+                        MiuixDataInstallRequesterWidget(viewModel = viewModel)
                     MiuixDataDeclareInstallerWidget(viewModel = viewModel)
                     MiuixDataManualDexoptWidget(viewModel)
                     MiuixDataAutoDeleteWidget(viewModel = viewModel)

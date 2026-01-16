@@ -21,6 +21,16 @@ interface IPrivilegedService {
     void delete(in String[] paths);
 
     /**
+    * Performs dex-optimization on a given package using the specified compiler filter.
+    *
+    * @param packageName The package to be optimized.
+    * @param compilerFilter The dex2oat compiler filter (e.g., "speed", "speed-profile").
+    * @param force Whether to force recompilation even if the system thinks it's unnecessary.
+    * @return {@code true} if the dex optimization was successful, {@code false} otherwise.
+    */
+    boolean performDexOpt(String packageName, String compilerFilter, boolean force);
+
+    /**
      * Sets or unsets the default installer component.
      *
      * @param component the {@link ComponentName} of the installer to be set as default
@@ -50,6 +60,13 @@ interface IPrivilegedService {
      * Executes a command and streams its output back via a listener.
      */
     void execArrWithCallback(in String[] command, ICommandOutputListener listener);
+
+    /**
+     * Sets the "Verify apps over ADB" setting in Global Settings.
+     *
+     * @param enabled true to enable verification (value 1), false to disable it (value 0).
+     */
+    void setAdbVerify(boolean enabled);
 
     /**
      * Grants a runtime permission to a specified package using the privileged service.
@@ -83,11 +100,4 @@ interface IPrivilegedService {
      * or null if the session is invalid or the query fails.
      */
     Bundle getSessionDetails(int sessionId);
-
-    /**
-     * Approves or rejects an installation session.
-     * @param sessionId The ID of the session.
-     * @param granted true to approve, false to reject.
-     */
-    void approveSession(int sessionId, boolean granted);
 }

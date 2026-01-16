@@ -19,8 +19,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kieronquinn.monetcompat.core.MonetCompat
 import com.rosan.installer.R
-import com.rosan.installer.data.app.model.entity.HttpProfile
-import com.rosan.installer.data.app.model.entity.RootImplementation
+import com.rosan.installer.data.app.model.enums.HttpProfile
+import com.rosan.installer.data.app.model.enums.RootImplementation
+import com.rosan.installer.data.app.util.PackageManagerUtil
 import com.rosan.installer.data.recycle.model.impl.PrivilegedManager
 import com.rosan.installer.data.settings.model.datastore.AppDataStore
 import com.rosan.installer.data.settings.model.datastore.entity.NamedPackage
@@ -35,6 +36,7 @@ import com.rosan.installer.ui.theme.m3color.PaletteStyle
 import com.rosan.installer.ui.theme.m3color.PresetColors
 import com.rosan.installer.ui.theme.m3color.RawColor
 import com.rosan.installer.ui.theme.m3color.ThemeMode
+import com.rosan.installer.ui.util.doBiometricAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -90,6 +92,7 @@ class PreferredViewModel(
             is PreferredViewAction.ChangeNotificationSuccessAutoClearSeconds -> changeNotificationSuccessAutoClearSeconds(action.seconds)
             is PreferredViewAction.ChangeShowExpressiveUI -> changeUseExpressiveUI(action.showRefreshedUI)
             is PreferredViewAction.ChangeShowLiveActivity -> changeUseLiveActivity(action.showLiveActivity)
+            is PreferredViewAction.ChangeBiometricAuth -> changeBiometricAuth(action.biometricAuth, action.isInstaller)
             is PreferredViewAction.ChangeUseMiuix -> changeUseMiuix(action.useMiuix)
             is PreferredViewAction.ChangePreferSystemIcon -> changePreferSystemIcon(action.preferSystemIcon)
             is PreferredViewAction.ChangeShowLauncherIcon -> changeShowLauncherIcon(action.showLauncherIcon)
@@ -143,6 +146,7 @@ class PreferredViewModel(
                 action.pkg
             )
 
+            is PreferredViewAction.ToggleGlobalUninstallFlag -> toggleGlobalUninstallFlag(action.flag, action.enable)
             is PreferredViewAction.SetAdbVerifyEnabledState -> viewModelScope.launch {
                 setAdbVerifyEnabled(
                     action.enabled,
@@ -156,8 +160,9 @@ class PreferredViewModel(
                 setDefaultInstaller(action.lock, action)
             }
 
-            is PreferredViewAction.LabChangeShizukuHookMode -> labChangeShizukuHookMode(action.enable)
             is PreferredViewAction.LabChangeRootModuleFlash -> labChangeRootModuleFlash(action.enable)
+            is PreferredViewAction.LabChangeRootShowModuleArt -> labChangeRootShowModuleArt(action.enable)
+            is PreferredViewAction.LabChangeRootModuleAlwaysUseRoot -> labChangeRootModuleAlwaysUseRoot(action.enable)
             is PreferredViewAction.LabChangeRootImplementation -> labChangeRootImplementation(action.implementation)
             is PreferredViewAction.LabChangeHttpProfile -> labChangeHttpProfile(action.profile)
             is PreferredViewAction.LabChangeHttpSaveFile -> labChangeHttpSaveFile(action.enable)
@@ -268,6 +273,21 @@ class PreferredViewModel(
             appDataStore.putBoolean(AppDataStore.SHOW_LIVE_ACTIVITY, showLiveActivity)
         }
 
+    private fun changeBiometricAuth(biometricAuth: Boolean, installer: Boolean) {
+        viewModelScope.launch {
+            if (!context.doBiometricAuth(
+                    title = context.getString(R.string.use_biometric_confirm_change_auth_settings),
+                    subTitle = context.getString(R.string.use_biometric_confirm_change_auth_settings_desc)
+                )
+            ) return@launch
+
+            appDataStore.putBoolean(
+                key = if (installer) AppDataStore.INSTALLER_REQUIRE_BIOMETRIC_AUTH else AppDataStore.UNINSTALLER_REQUIRE_BIOMETRIC_AUTH,
+                value = biometricAuth
+            )
+        }
+    }
+
     private fun changeUseMiuix(useMiuix: Boolean) =
         viewModelScope.launch {
             appDataStore.putBoolean(AppDataStore.UI_USE_MIUIX, useMiuix)
@@ -366,6 +386,37 @@ class PreferredViewModel(
             appDataStore.putSharedUidList(AppDataStore.MANAGED_SHARED_USER_ID_BLACKLIST, newList)
         }
 
+    private fun toggleGlobalUninstallFlag(flag: Int, enable: Boolean) = viewModelScope.launch {
+        appDataStore.updateUninstallFlags { currentFlags ->
+            var newFlags = currentFlags
+
+            if (enable) {
+                // 1. Add the flag being enabled
+                newFlags = newFlags or flag
+
+                // 2. Handle mutual exclusivity
+                if (flag == PackageManagerUtil.DELETE_ALL_USERS) {
+                    if (currentFlags and PackageManagerUtil.DELETE_SYSTEM_APP != 0) {
+                        // Notify user about forced change
+                        notifyMutualExclusion(flag)
+                        newFlags = newFlags and PackageManagerUtil.DELETE_SYSTEM_APP.inv()
+                    }
+                } else if (flag == PackageManagerUtil.DELETE_SYSTEM_APP) {
+                    if (currentFlags and PackageManagerUtil.DELETE_ALL_USERS != 0) {
+                        // Notify user about forced change
+                        notifyMutualExclusion(flag)
+                        newFlags = newFlags and PackageManagerUtil.DELETE_ALL_USERS.inv()
+                    }
+                }
+            } else {
+                // Disable: just remove the flag
+                newFlags = newFlags and flag.inv()
+            }
+
+            newFlags
+        }
+    }
+
     private fun getIsIgnoreBatteryOptAsFlow(): Flow<Boolean> = flow {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         emit(pm.isIgnoringBatteryOptimizations(context.packageName))
@@ -410,24 +461,12 @@ class PreferredViewModel(
             successMessage = null, // No success snackbar message for this action type
             block = {
                 Timber.d("Changing ADB Verify Enabled to: $enabled")
-                val isPermissionGranted = PrivilegedManager.isPermissionGranted(
-                    state.authorizer,
-                    context.packageName, "android.permission.WRITE_SECURE_SETTINGS"
-                )
-                if (!isPermissionGranted) {
-                    Timber.w("WRITE_SECURE_SETTINGS permission not granted, attempting to grant it...")
-                    PrivilegedManager.grantRuntimePermission(
-                        state.authorizer,
-                        context.packageName,
-                        "android.permission.WRITE_SECURE_SETTINGS"
-                    )
-                }
-
-                // This need android.permission.WRITE_SECURE_SETTINGS, thus cannot be called directly
-                Settings.Global.putInt(
-                    context.contentResolver,
-                    "verifier_verify_adb_installs",
-                    if (enabled) 1 else 0
+                // [New Logic] Delegate to PrivilegedManager (Service)
+                // The Service handles the Permission/Hook logic internally via Binder Proxy
+                PrivilegedManager.setAdbVerify(
+                    authorizer = state.authorizer,
+                    customizeAuthorizer = state.customizeAuthorizer,
+                    enabled = enabled
                 )
                 adbVerifyEnabledFlow.value = enabled
             }
@@ -458,14 +497,19 @@ class PreferredViewModel(
         )
     }
 
-    private fun labChangeShizukuHookMode(enabled: Boolean) =
-        viewModelScope.launch {
-            appDataStore.putBoolean(AppDataStore.LAB_USE_SHIZUKU_HOOK_MODE, enabled)
-        }
-
     private fun labChangeRootModuleFlash(enabled: Boolean) =
         viewModelScope.launch {
             appDataStore.putBoolean(AppDataStore.LAB_ENABLE_MODULE_FLASH, enabled)
+        }
+
+    private fun labChangeRootShowModuleArt(enabled: Boolean) =
+        viewModelScope.launch {
+            appDataStore.putBoolean(AppDataStore.LAB_MODULE_FLASH_SHOW_ART, enabled)
+        }
+
+    private fun labChangeRootModuleAlwaysUseRoot(enabled: Boolean) =
+        viewModelScope.launch {
+            appDataStore.putBoolean(AppDataStore.LAB_MODULE_ALWAYS_ROOT, enabled)
         }
 
     private fun labChangeRootImplementation(implementation: RootImplementation) =
@@ -554,6 +598,22 @@ class PreferredViewModel(
         }
     }.flowOn(Dispatchers.IO)
 
+    private fun notifyMutualExclusion(disabledFlag: Int) {
+        val resId = when (disabledFlag) {
+            PackageManagerUtil.DELETE_ALL_USERS ->
+                R.string.uninstall_system_app_disabled
+
+            PackageManagerUtil.DELETE_SYSTEM_APP ->
+                R.string.uninstall_all_users_disabled
+
+            else -> return
+        }
+
+        _uiEvents.tryEmit(
+            PreferredViewEvent.ShowMessage(resId)
+        )
+    }
+
     private fun getAndCombineState() =
         viewModelScope.launch {
             val authorizerFlow = appDataStore.getString(AppDataStore.AUTHORIZER)
@@ -581,6 +641,10 @@ class PreferredViewModel(
                 appDataStore.getBoolean(AppDataStore.DIALOG_SHOW_OPPO_SPECIAL, false)
             val showExpressiveUIFlow =
                 appDataStore.getBoolean(AppDataStore.UI_EXPRESSIVE_SWITCH, true)
+            val installerRequireBiometricAuthFlow =
+                appDataStore.getBoolean(AppDataStore.INSTALLER_REQUIRE_BIOMETRIC_AUTH, false)
+            val uninstallerRequireBiometricAuthFlow =
+                appDataStore.getBoolean(AppDataStore.UNINSTALLER_REQUIRE_BIOMETRIC_AUTH, false)
             val showLiveActivityFlow =
                 appDataStore.getBoolean(AppDataStore.SHOW_LIVE_ACTIVITY, false)
             val autoLockInstallerFlow =
@@ -601,10 +665,14 @@ class PreferredViewModel(
                 appDataStore.getSharedUidList(AppDataStore.MANAGED_SHARED_USER_ID_BLACKLIST)
             val managedSharedUserIdExemptPkgFlow =
                 appDataStore.getNamedPackageList(AppDataStore.MANAGED_SHARED_USER_ID_EXEMPTED_PACKAGES_LIST)
-            val labShizukuHookModeFlow =
-                appDataStore.getBoolean(AppDataStore.LAB_USE_SHIZUKU_HOOK_MODE, true)
+            val uninstallFlagsFlow =
+                appDataStore.getInt(AppDataStore.UNINSTALL_FLAGS, 0)
             val labRootModuleFlashFlow =
                 appDataStore.getBoolean(AppDataStore.LAB_ENABLE_MODULE_FLASH, false)
+            val labRootShowModuleArtFlow =
+                appDataStore.getBoolean(AppDataStore.LAB_MODULE_FLASH_SHOW_ART, true)
+            val labRootModuleAlwaysUseRootFlow =
+                appDataStore.getBoolean(AppDataStore.LAB_MODULE_ALWAYS_ROOT, false)
             val labRootImplementationFlow =
                 appDataStore.getString(AppDataStore.LAB_ROOT_IMPLEMENTATION)
                     .map { RootImplementation.fromString(it) }
@@ -648,6 +716,8 @@ class PreferredViewModel(
                 sdkCompareInSingleLineFlow,
                 showOPPOSpecialFlow,
                 showExpressiveUIFlow,
+                installerRequireBiometricAuthFlow,
+                uninstallerRequireBiometricAuthFlow,
                 showLiveActivityFlow,
                 autoLockInstallerFlow,
                 autoSilentInstallFlow,
@@ -658,10 +728,12 @@ class PreferredViewModel(
                 managedBlacklistPackagesFlow,
                 managedSharedUserIdBlacklistFlow,
                 managedSharedUserIdExemptPkgFlow,
+                uninstallFlagsFlow,
                 adbVerifyEnabledFlow,
                 isIgnoringBatteryOptFlow,
-                labShizukuHookModeFlow,
                 labRootModuleFlashFlow,
+                labRootShowModuleArtFlow,
+                labRootModuleAlwaysUseRootFlow,
                 labRootImplementationFlow,
                 labHttpProfileFlow,
                 labHttpSaveFileFlow,
@@ -690,6 +762,8 @@ class PreferredViewModel(
                 val sdkCompareInSingleLine = values[idx++] as Boolean
                 val showOPPOSpecial = values[idx++] as Boolean
                 val showExpressiveUI = values[idx++] as Boolean
+                val installerRequireBiometricAuth = values[idx++] as Boolean
+                val uninstallerRequireBiometricAuth = values[idx++] as Boolean
                 val showLiveActivity = values[idx++] as Boolean
                 val autoLockInstaller = values[idx++] as Boolean
                 val autoSilentInstall = values[idx++] as Boolean
@@ -704,10 +778,12 @@ class PreferredViewModel(
                     (values[idx++] as? List<*>)?.filterIsInstance<SharedUid>() ?: emptyList()
                 val managedSharedUserIdExemptPkg =
                     (values[idx++] as? List<*>)?.filterIsInstance<NamedPackage>() ?: emptyList()
+                val uninstallFlags = values[idx++] as Int
                 val adbVerifyEnabled = values[idx++] as Boolean
                 val isIgnoringBatteryOptimizations = values[idx++] as Boolean
-                val labShizukuHookMode = values[idx++] as Boolean
                 val labRootModuleFlash = values[idx++] as Boolean
+                val labRootShowModuleArt = values[idx++] as Boolean
+                val labRootModuleAlwaysUseRoot = values[idx++] as Boolean
                 val labRootImplementation = values[idx++] as RootImplementation
                 val labHttpProfile = values[idx++] as HttpProfile
                 val labHttpSaveFile = values[idx++] as Boolean
@@ -761,6 +837,8 @@ class PreferredViewModel(
                     sdkCompareInMultiLine = sdkCompareInSingleLine,
                     showOPPOSpecial = showOPPOSpecial,
                     showExpressiveUI = showExpressiveUI,
+                    installerRequireBiometricAuth = installerRequireBiometricAuth,
+                    uninstallerRequireBiometricAuth = uninstallerRequireBiometricAuth,
                     showLiveActivity = showLiveActivity,
                     autoLockInstaller = autoLockInstaller,
                     autoSilentInstall = autoSilentInstall,
@@ -773,8 +851,9 @@ class PreferredViewModel(
                     managedSharedUserIdExemptedPackages = managedSharedUserIdExemptPkg,
                     adbVerifyEnabled = adbVerifyEnabled,
                     isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations,
-                    labShizukuHookMode = labShizukuHookMode,
                     labRootEnableModuleFlash = labRootModuleFlash,
+                    labRootShowModuleArt = labRootShowModuleArt,
+                    labRootModuleAlwaysUseRoot = labRootModuleAlwaysUseRoot,
                     labRootImplementation = labRootImplementation,
                     labHttpProfile = labHttpProfile,
                     labHttpSaveFile = labHttpSaveFile,
@@ -788,7 +867,8 @@ class PreferredViewModel(
                     useDynColorFollowPkgIcon = useDynColorFollowPkgIcon,
                     useDynColorFollowPkgIconForLiveActivity = useDynColorFollowPkgIconForLiveActivity,
                     hasUpdate = hasUpdate,
-                    remoteVersion = remoteVersion
+                    remoteVersion = remoteVersion,
+                    uninstallFlags = uninstallFlags
                 )
             }.collectLatest { state = it }
         }

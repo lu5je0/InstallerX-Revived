@@ -50,9 +50,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.rosan.installer.R
-import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
 import com.rosan.installer.ui.icons.AppIcons
-import com.rosan.installer.ui.page.main.widget.card.NoneInstallerTipCard
+import com.rosan.installer.ui.page.main.widget.card.InfoTipCard
 import com.rosan.installer.ui.page.main.widget.dialog.UnsavedChangesDialog
 import com.rosan.installer.ui.page.main.widget.setting.AppBackButton
 import com.rosan.installer.ui.page.main.widget.setting.DataAllowAllRequestedPermissionsWidget
@@ -66,6 +65,8 @@ import com.rosan.installer.ui.page.main.widget.setting.DataDeclareInstallerWidge
 import com.rosan.installer.ui.page.main.widget.setting.DataDescriptionWidget
 import com.rosan.installer.ui.page.main.widget.setting.DataForAllUserWidget
 import com.rosan.installer.ui.page.main.widget.setting.DataInstallModeWidget
+import com.rosan.installer.ui.page.main.widget.setting.DataInstallReasonWidget
+import com.rosan.installer.ui.page.main.widget.setting.DataInstallRequesterWidget
 import com.rosan.installer.ui.page.main.widget.setting.DataManualDexoptWidget
 import com.rosan.installer.ui.page.main.widget.setting.DataNameWidget
 import com.rosan.installer.ui.page.main.widget.setting.DataPackageSourceWidget
@@ -75,6 +76,7 @@ import com.rosan.installer.ui.page.main.widget.setting.DisplaySdkWidget
 import com.rosan.installer.ui.page.main.widget.setting.DisplaySizeWidget
 import com.rosan.installer.ui.page.main.widget.setting.SplicedColumnGroup
 import com.rosan.installer.ui.theme.none
+import com.rosan.installer.ui.util.isNoneActive
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -107,12 +109,6 @@ fun NewEditPage(
 
     val stateAuthorizer = viewModel.state.data.authorizer
     val globalAuthorizer = viewModel.globalAuthorizer
-
-    val isNone = when (stateAuthorizer) {
-        ConfigEntity.Authorizer.None -> true
-        ConfigEntity.Authorizer.Global -> globalAuthorizer == ConfigEntity.Authorizer.None
-        else -> false
-    }
 
     LaunchedEffect(listState) {
         var previousIndex = listState.firstVisibleItemIndex
@@ -203,7 +199,7 @@ fun NewEditPage(
                             onClick = { navController.navigateUp() },
                             icon = Icons.AutoMirrored.TwoTone.ArrowBack,
                             modifier = Modifier.size(36.dp),
-                            containerColor = MaterialTheme.colorScheme.surfaceBright
+                            containerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
                         )
                         Spacer(modifier = Modifier.size(16.dp))
                     }
@@ -227,7 +223,7 @@ fun NewEditPage(
                             ),
                             colors = IconButtonDefaults.iconButtonColors(
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                containerColor = MaterialTheme.colorScheme.primaryContainer, // 标准 IconButton 背景是透明的
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
                             )
                         ) {
                             Icon(
@@ -239,7 +235,7 @@ fun NewEditPage(
                 }
             )
         },
-        // 修改: 只有在未滚动到底部时，才在右下角显示 FAB
+        // 只有在未滚动到底部时，才在右下角显示 FAB
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showFloating, // 在未滚动到底部且 showFloating 为 true 时可见
@@ -255,12 +251,8 @@ fun NewEditPage(
                             contentDescription = text
                         )
                     },
-                    text = {
-                        Text(text)
-                    },
-                    onClick = {
-                        viewModel.dispatch(EditViewAction.SaveData)
-                    }
+                    text = { Text(text) },
+                    onClick = { viewModel.dispatch(EditViewAction.SaveData) }
                 )
             }
         },
@@ -270,63 +262,69 @@ fun NewEditPage(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(it),
-            state = listState, // 关键: 将 state 传入 LazyColumn
+            state = listState,
         ) {
             // --- Group 1: Main Settings ---
             item {
                 SplicedColumnGroup(
-                    title = stringResource(R.string.config_label_main_settings),
-                    content = buildList {
-                        add { DataNameWidget(viewModel, { DataDescriptionWidget(viewModel) }) }
-                        add { DataAuthorizerWidget(viewModel) }
-                        // Add customize authorizer widget only if the condition is met.
-                        if (viewModel.state.data.authorizerCustomize)
-                            add { DataCustomizeAuthorizerWidget(viewModel) }
-                        add { DataInstallModeWidget(viewModel) }
+                    title = stringResource(R.string.config_label_main_settings)
+                ) {
+                    item { DataNameWidget(viewModel, { DataDescriptionWidget(viewModel) }) }
+                    item { DataAuthorizerWidget(viewModel) }
+                    item(visible = viewModel.state.data.authorizerCustomize) {
+                        DataCustomizeAuthorizerWidget(viewModel)
                     }
-                )
+                    item { DataInstallModeWidget(viewModel) }
+                }
             }
 
-            if (isNone) item { NoneInstallerTipCard() }
+            if (isNoneActive(stateAuthorizer, globalAuthorizer)) {
+                item { InfoTipCard(text = stringResource(R.string.config_authorizer_none_tips)) }
+            }
 
             // --- Group 2: Installer Settings ---
             item {
                 SplicedColumnGroup(
-                    title = stringResource(R.string.config_label_installer_settings),
-                    content = buildList {
-                        add { DataUserWidget(viewModel) }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add { DataPackageSourceWidget(viewModel) }
-                        add { DataDeclareInstallerWidget(viewModel) }
-                        add { DataManualDexoptWidget(viewModel) }
-                        add { DataAutoDeleteWidget(viewModel) }
-                        add { DisplaySdkWidget(viewModel) }
-                        add { DisplaySizeWidget(viewModel) }
+                    title = stringResource(R.string.config_label_installer_settings)
+                ) {
+                    item { DataUserWidget(viewModel) }
+                    item { DataInstallReasonWidget(viewModel) }
+                    item(visible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        DataPackageSourceWidget(viewModel)
                     }
-                )
+                    item(visible = viewModel.state.isCustomInstallRequesterEnabled) {
+                        DataInstallRequesterWidget(viewModel)
+                    }
+                    item { DataDeclareInstallerWidget(viewModel) }
+                    item { DataManualDexoptWidget(viewModel) }
+                    item { DataAutoDeleteWidget(viewModel) }
+                    item { DisplaySdkWidget(viewModel) }
+                    item { DisplaySizeWidget(viewModel) }
+                }
             }
 
             // --- Group 3: Install Options ---
             item {
                 SplicedColumnGroup(
-                    title = stringResource(R.string.config_label_install_options),
-                    content = buildList {
-                        add { DataForAllUserWidget(viewModel) }
-                        add { DataAllowTestOnlyWidget(viewModel) }
-                        add { DataAllowDowngradeWidget(viewModel) }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-                            add { DataBypassLowTargetSdkWidget(viewModel) }
-                        add { DataAllowAllRequestedPermissionsWidget(viewModel) }
+                    title = stringResource(R.string.config_label_install_options)
+                ) {
+                    item { DataForAllUserWidget(viewModel) }
+                    item { DataAllowTestOnlyWidget(viewModel) }
+                    item { DataAllowDowngradeWidget(viewModel) }
+                    item(visible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        DataBypassLowTargetSdkWidget(viewModel)
                     }
-                )
+                    item { DataAllowAllRequestedPermissionsWidget(viewModel) }
+                }
             }
 
+            // --- Group 4: App Bundle Settings ---
             item {
                 SplicedColumnGroup(
-                    title = stringResource(R.string.config_label_app_bundle_settings),
-                    content = buildList {
-                        add { DataSplitChooseAllWidget(viewModel) }
-                    }
-                )
+                    title = stringResource(R.string.config_label_app_bundle_settings)
+                ) {
+                    item { DataSplitChooseAllWidget(viewModel) }
+                }
             }
 
             item { Spacer(Modifier.navigationBarsPadding()) }

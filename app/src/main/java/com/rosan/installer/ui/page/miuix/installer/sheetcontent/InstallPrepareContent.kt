@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,9 +38,9 @@ import com.rosan.installer.R
 import com.rosan.installer.build.RsConfig
 import com.rosan.installer.build.model.entity.Manufacturer
 import com.rosan.installer.data.app.model.entity.AppEntity
-import com.rosan.installer.data.app.model.entity.DataType
 import com.rosan.installer.data.app.model.entity.InstalledAppInfo
-import com.rosan.installer.data.app.model.entity.SignatureMatchStatus
+import com.rosan.installer.data.app.model.enums.DataType
+import com.rosan.installer.data.app.model.enums.SignatureMatchStatus
 import com.rosan.installer.data.installer.repo.InstallerRepo
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
 import com.rosan.installer.ui.icons.AppIcons
@@ -49,6 +48,7 @@ import com.rosan.installer.ui.page.main.installer.InstallerViewAction
 import com.rosan.installer.ui.page.main.installer.InstallerViewModel
 import com.rosan.installer.ui.page.miuix.widgets.MiuixInstallerTipCard
 import com.rosan.installer.ui.page.miuix.widgets.MiuixNavigationItemWidget
+import com.rosan.installer.ui.theme.LocalIsDark
 import com.rosan.installer.ui.theme.miuixSheetCardColorDark
 import com.rosan.installer.ui.util.formatSize
 import com.rosan.installer.ui.util.isGestureNavigation
@@ -64,14 +64,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme.isDynamicColor
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InstallPrepareContent(
-    colorScheme: ColorScheme,
-    isDarkMode: Boolean,
     installer: InstallerRepo,
     viewModel: InstallerViewModel,
     appInfo: AppInfoState,
     onCancel: () -> Unit,
     onInstall: () -> Unit
 ) {
+    val isDarkMode = LocalIsDark.current
     val currentPackageName by viewModel.currentPackageName.collectAsState()
     val currentPackage = installer.analysisResults.find { it.packageName == currentPackageName }
     val settings = viewModel.viewSettings
@@ -94,8 +93,10 @@ fun InstallPrepareContent(
         .map { it.app }
         .filterIsInstance<AppEntity.BaseEntity>()
         .firstOrNull()
-    val primaryEntity = appInfo.primaryEntity
-    if (primaryEntity == null) {
+    val effectivePrimaryEntity = selectedEntities.filterIsInstance<AppEntity.BaseEntity>().firstOrNull()
+        ?: selectedEntities.filterIsInstance<AppEntity.ModuleEntity>().firstOrNull()
+        ?: appInfo.primaryEntity
+    if (effectivePrimaryEntity == null) {
         LoadingContent(statusText = "No main app entity found")
         return
     }
@@ -103,10 +104,12 @@ fun InstallPrepareContent(
     val entityToInstall = allEntities.filterIsInstance<AppEntity.BaseEntity>().firstOrNull()
     val totalSelectedSize = allEntities.sumOf { it.size }
 
-    val isPureSplit = primaryEntity is AppEntity.SplitEntity
-    val isBundleSplitUpdate = primaryEntity is AppEntity.BaseEntity &&
+    val isModuleSelected = selectedEntities.any { it is AppEntity.ModuleEntity }
+    val isPureSplit = effectivePrimaryEntity is AppEntity.SplitEntity
+    val isBundleSplitUpdate = effectivePrimaryEntity is AppEntity.BaseEntity &&
             entityToInstall == null &&
-            selectedEntities.isNotEmpty()
+            selectedEntities.isNotEmpty() &&
+            !isModuleSelected
     val isSplitUpdateMode = (isBundleSplitUpdate || isPureSplit) && currentPackage.installedAppInfo != null
 
     val errorColor = MaterialTheme.colorScheme.error
@@ -131,13 +134,15 @@ fun InstallPrepareContent(
                         warnings.add(downgradeWarning to errorColor)
                         finalButtonTextId = R.string.install_anyway
                     }
-
+                    // If it's a "Ghost" app (Uninstalled but data kept), treat it as a Reinstall
+                    oldInfo.isUninstalled -> finalButtonTextId = R.string.reinstall
+                    // If it's Archived, treat it as Unarchive
                     oldInfo.isArchived -> finalButtonTextId = R.string.unarchive
                     else -> finalButtonTextId = R.string.reinstall
                 }
             }
         }
-        if (!isSplitUpdateMode && (primaryEntity.sourceType == DataType.APK || primaryEntity.sourceType == DataType.APKS))
+        if (!isSplitUpdateMode && (effectivePrimaryEntity.sourceType == DataType.APK || effectivePrimaryEntity.sourceType == DataType.APKS))
             when (signatureStatus) {
                 SignatureMatchStatus.MISMATCH -> {
                     warnings.add(0, sigMismatchWarning to errorColor)
@@ -161,18 +166,15 @@ fun InstallPrepareContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item { AppInfoSlot(appInfo = appInfo) }
-
         item { Spacer(modifier = Modifier.height(16.dp)) }
-
         item { MiuixWarningTextBlock(warnings = warningMessages) }
-
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 6.dp),
                 colors = CardColors(
-                    color = if (isDynamicColor) colorScheme.surfaceContainer else
+                    color = if (isDynamicColor) MiuixTheme.colorScheme.surfaceContainer else
                         if (isDarkMode) miuixSheetCardColorDark else Color.White,
                     contentColor = MiuixTheme.colorScheme.onSurface
                 )
@@ -181,28 +183,29 @@ fun InstallPrepareContent(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    when (primaryEntity) {
+                    when (effectivePrimaryEntity) {
                         is AppEntity.BaseEntity -> {
                             AdaptiveInfoRow(
                                 labelResId = R.string.installer_version_name_label,
-                                newValue = primaryEntity.versionName,
+                                newValue = effectivePrimaryEntity.versionName,
                                 oldValue = currentPackage.installedAppInfo?.versionName,
+                                isUninstalled = currentPackage.installedAppInfo?.isUninstalled ?: false,
                                 isArchived = currentPackage.installedAppInfo?.isArchived ?: false
                             )
                             AdaptiveInfoRow(
                                 labelResId = R.string.installer_version_code_label,
-                                newValue = primaryEntity.versionCode.toString(),
+                                newValue = effectivePrimaryEntity.versionCode.toString(),
                                 oldValue = currentPackage.installedAppInfo?.versionCode?.toString(),
-                                isDowngrade = if (currentPackage.installedAppInfo != null) primaryEntity.versionCode < currentPackage.installedAppInfo.versionCode else false,
+                                isUninstalled = currentPackage.installedAppInfo?.isUninstalled ?: false,
                                 isArchived = currentPackage.installedAppInfo?.isArchived ?: false
                             )
                             SDKComparison(
-                                entityToInstall = primaryEntity,
+                                entityToInstall = effectivePrimaryEntity,
                                 preInstallAppInfo = currentPackage.installedAppInfo,
                                 installer = installer
                             )
 
-                            AnimatedVisibility(visible = installer.config.displaySize && primaryEntity.size > 0) {
+                            AnimatedVisibility(visible = installer.config.displaySize && effectivePrimaryEntity.size > 0) {
                                 val oldSize = currentPackage.installedAppInfo?.packageSize ?: 0L
                                 val oldSizeStr = if (oldSize > 0 && !isSplitUpdateMode) oldSize.formatSize() else null
                                 val newSizeStr = totalSelectedSize.formatSize()
@@ -210,19 +213,17 @@ fun InstallPrepareContent(
                                 AdaptiveInfoRow(
                                     labelResId = R.string.installer_package_size_label,
                                     newValue = newSizeStr,
-                                    oldValue = oldSizeStr,
-                                    isArchived = false
+                                    oldValue = oldSizeStr
                                 )
                             }
 
                             if (RsConfig.currentManufacturer == Manufacturer.OPPO || RsConfig.currentManufacturer == Manufacturer.ONEPLUS) {
-                                AnimatedVisibility(visible = settings.showOPPOSpecial && primaryEntity.sourceType == DataType.APK) {
-                                    primaryEntity.minOsdkVersion?.let {
+                                AnimatedVisibility(visible = settings.showOPPOSpecial && effectivePrimaryEntity.sourceType == DataType.APK) {
+                                    effectivePrimaryEntity.minOsdkVersion?.let {
                                         AdaptiveInfoRow(
                                             labelResId = R.string.installer_package_minOsdkVersion_label,
                                             newValue = it,
-                                            oldValue = null,
-                                            isArchived = false
+                                            oldValue = null
                                         )
                                     }
                                 }
@@ -232,25 +233,28 @@ fun InstallPrepareContent(
                         is AppEntity.ModuleEntity -> {
                             AdaptiveInfoRow(
                                 labelResId = R.string.installer_version_name_label,
-                                newValue = primaryEntity.version,
-                                oldValue = null,
-                                isArchived = false
+                                newValue = effectivePrimaryEntity.version,
+                                oldValue = null
                             )
                             AdaptiveInfoRow(
                                 labelResId = R.string.installer_version_code_label,
-                                newValue = primaryEntity.versionCode.toString(),
-                                oldValue = null,
-                                isArchived = false
+                                newValue = effectivePrimaryEntity.versionCode.toString(),
+                                oldValue = null
                             )
                             AnimatedVisibility(visible = installer.config.displaySdk) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    AdaptiveInfoRow(
-                                        labelResId = R.string.installer_module_author_label,
-                                        newValue = primaryEntity.author,
-                                        oldValue = null,
-                                        isArchived = false
-                                    )
-                                }
+                                AdaptiveInfoRow(
+                                    labelResId = R.string.installer_module_author_label,
+                                    newValue = effectivePrimaryEntity.author,
+                                    oldValue = null
+                                )
+                            }
+                            AnimatedVisibility(visible = installer.config.displaySize) {
+                                val newSizeStr = totalSelectedSize.formatSize()
+                                AdaptiveInfoRow(
+                                    labelResId = R.string.installer_package_size_label,
+                                    newValue = newSizeStr,
+                                    oldValue = null
+                                )
                             }
                         }
 
@@ -258,14 +262,13 @@ fun InstallPrepareContent(
                             // Split Name
                             AdaptiveInfoRow(
                                 labelResId = R.string.installer_split_name_label,
-                                newValue = primaryEntity.splitName,
-                                oldValue = null,
-                                isArchived = false
+                                newValue = effectivePrimaryEntity.splitName,
+                                oldValue = null
                             )
 
                             // SDK Comparison (If splits define min/target SDK)
                             SDKComparison(
-                                entityToInstall = primaryEntity,
+                                entityToInstall = effectivePrimaryEntity,
                                 preInstallAppInfo = currentPackage.installedAppInfo,
                                 installer = installer
                             )
@@ -276,8 +279,7 @@ fun InstallPrepareContent(
                                 AdaptiveInfoRow(
                                     labelResId = R.string.installer_package_size_label,
                                     newValue = newSizeStr,
-                                    oldValue = null, // Don't compare with full app size, meaningless
-                                    isArchived = false
+                                    oldValue = null // Don't compare with full app size, meaningless
                                 )
                             }
                         }
@@ -299,7 +301,7 @@ fun InstallPrepareContent(
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
                     colors = CardColors(
-                        color = if (isDynamicColor) colorScheme.surfaceContainer else
+                        color = if (isDynamicColor) MiuixTheme.colorScheme.surfaceContainer else
                             if (isDarkMode) miuixSheetCardColorDark else Color.White,
                         contentColor = MiuixTheme.colorScheme.onSurface
                     )
@@ -366,17 +368,17 @@ fun InstallPrepareContent(
 
         item {
             AnimatedVisibility(
-                visible = (primaryEntity is AppEntity.ModuleEntity) &&
-                        primaryEntity.description.isNotBlank() &&
+                visible = (effectivePrimaryEntity is AppEntity.ModuleEntity) &&
+                        effectivePrimaryEntity.description.isNotBlank() &&
                         installer.config.displaySdk,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                MiuixInstallerTipCard((primaryEntity as AppEntity.ModuleEntity).description)
+                MiuixInstallerTipCard((effectivePrimaryEntity as AppEntity.ModuleEntity).description)
             }
         }
 
-        val canInstallBaseEntity = (primaryEntity as? AppEntity.BaseEntity)?.let { base ->
+        val canInstallBaseEntity = (effectivePrimaryEntity as? AppEntity.BaseEntity)?.let { base ->
             if (entityToInstall != null) {
                 // Installing Base: Check SDK
                 base.minSdk?.toIntOrNull()?.let { sdk -> sdk <= Build.VERSION.SDK_INT } ?: true
@@ -386,11 +388,11 @@ fun InstallPrepareContent(
             }
         } ?: false
 
-        val canInstallModuleEntity = (primaryEntity as? AppEntity.ModuleEntity)?.let {
+        val canInstallModuleEntity = (effectivePrimaryEntity as? AppEntity.ModuleEntity)?.let {
             settings.enableModuleInstall
         } ?: false
 
-        val canInstallSplitEntity = (primaryEntity as? AppEntity.SplitEntity)?.let {
+        val canInstallSplitEntity = (effectivePrimaryEntity as? AppEntity.SplitEntity)?.let {
             currentPackage.installedAppInfo != null
         } ?: false
 
@@ -444,11 +446,15 @@ private fun AdaptiveInfoRow(
     @StringRes labelResId: Int,
     newValue: String,
     oldValue: String?,
-    isDowngrade: Boolean = false,
-    isArchived: Boolean
+    isUninstalled: Boolean = false,
+    isArchived: Boolean = false
 ) {
     val showComparison = oldValue != null && newValue != oldValue
-    val oldTextContent = if (isArchived) stringResource(R.string.old_version_archived) else oldValue.orEmpty()
+    val oldTextContent = when {
+        isArchived -> stringResource(R.string.old_version_archived)
+        isUninstalled -> stringResource(R.string.old_version_uninstalled)
+        else -> oldValue.orEmpty()
+    }
 
     SubcomposeLayout { constraints ->
         val label = @Composable {
@@ -578,6 +584,7 @@ private fun SDKComparison(
                     labelResId = R.string.installer_package_min_sdk_label,
                     newSdk = newMinSdk,
                     oldSdk = preInstallAppInfo?.minSdk?.toString(),
+                    isUninstalled = preInstallAppInfo?.isUninstalled ?: false,
                     isArchived = preInstallAppInfo?.isArchived ?: false,
                     type = "min"
                 )
@@ -591,7 +598,8 @@ private fun SdkInfoRow(
     @StringRes labelResId: Int,
     newSdk: String,
     oldSdk: String?,
-    isArchived: Boolean,
+    isUninstalled: Boolean = false,
+    isArchived: Boolean = false,
     type: String // "min" or "target"
 ) {
     val newSdkInt = newSdk.toIntOrNull()
@@ -617,7 +625,11 @@ private fun SdkInfoRow(
                 // val isIncompatible = type == "min" && newSdkInt > Build.VERSION.SDK_INT
                 // val color = if (isDowngrade || isIncompatible) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
 
-                val oldText = if (isArchived) stringResource(R.string.old_version_archived) else oldSdk
+                val oldText = when {
+                    isUninstalled -> stringResource(R.string.old_version_uninstalled)
+                    isArchived -> stringResource(R.string.old_version_archived)
+                    else -> oldSdk
+                }
 
                 Text(text = oldText, style = MiuixTheme.textStyles.body2)
 

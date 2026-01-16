@@ -86,13 +86,11 @@ class InstallerRepoImpl private constructor(override val id: String) : Installer
         fun remove(id: String) {
             synchronized(this) {
                 Timber.d("remove() called for id: $id")
-                // REMOVED: No more special handling for the anonymous instance.
                 impls.remove(id)
             }
         }
     }
 
-    // 添加原子关闭标志
     private val isClosed = AtomicBoolean(false)
 
     override var error: Throwable = Throwable()
@@ -119,9 +117,9 @@ class InstallerRepoImpl private constructor(override val id: String) : Installer
         action.tryEmit(Action.Analyse)
     }
 
-    override fun install() {
+    override fun install(triggerAuth: Boolean) {
         Timber.d("[id=$id] install() called. Emitting Action.Install.")
-        action.tryEmit(Action.Install)
+        action.tryEmit(Action.Install(triggerAuth))
     }
 
     override fun installMultiple(entities: List<SelectInstallEntity>) {
@@ -156,6 +154,11 @@ class InstallerRepoImpl private constructor(override val id: String) : Installer
         action.tryEmit(Action.ApproveSession(sessionId, granted))
     }
 
+    override fun reboot(reason: String) {
+        Timber.d("[id=$id] reboot() called. Emitting Action.Reboot.")
+        action.tryEmit(Action.Reboot(reason))
+    }
+
     override fun background(value: Boolean) {
         Timber.d("[id=$id] background() called with value: $value.")
         background.tryEmit(value)
@@ -179,12 +182,35 @@ class InstallerRepoImpl private constructor(override val id: String) : Installer
     sealed class Action {
         data class ResolveInstall(val activity: Activity) : Action()
         data object Analyse : Action()
-        data object Install : Action()
+
+        /**
+         * Install single module/apk
+         *
+         * **This usually call from viewModel**
+         *
+         * @param triggerAuth request or not request user biometric auth
+         * @see com.rosan.installer.ui.page.main.installer.InstallerViewAction.Install
+         * @see com.rosan.installer.data.installer.model.impl.installer.ActionHandler.handleSingleInstall
+         */
+        data class Install(val triggerAuth: Boolean) : Action()
+
+        /**
+         * Install multiple module/apk
+         *
+         * **This usually call from viewModel**
+         * @see com.rosan.installer.ui.page.main.installer.InstallerViewAction.InstallMultiple
+         * @see com.rosan.installer.data.installer.model.impl.installer.ActionHandler.handleMultiInstall
+         */
         data object InstallMultiple : Action()
         data class ResolveUninstall(val activity: Activity, val packageName: String) : Action()
         data class Uninstall(val packageName: String) : Action()
         data class ResolveConfirmInstall(val activity: Activity, val sessionId: Int) : Action()
         data class ApproveSession(val sessionId: Int, val granted: Boolean) : Action()
+
+        /**
+         * Action to trigger device reboot after cleanup.
+         */
+        data class Reboot(val reason: String) : Action()
         data object Cancel : Action()
         data object Finish : Action()
     }

@@ -1,8 +1,8 @@
 package com.rosan.installer.ui.page.main.settings.preferred
 
 import androidx.compose.ui.graphics.Color
-import com.rosan.installer.data.app.model.entity.HttpProfile
-import com.rosan.installer.data.app.model.entity.RootImplementation
+import com.rosan.installer.data.app.model.enums.HttpProfile
+import com.rosan.installer.data.app.model.enums.RootImplementation
 import com.rosan.installer.data.settings.model.datastore.entity.NamedPackage
 import com.rosan.installer.data.settings.model.datastore.entity.SharedUid
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
@@ -24,6 +24,7 @@ sealed class PreferredViewAction {
     data class ChangeNotificationSuccessAutoClearSeconds(val seconds: Int) : PreferredViewAction()
     data class ChangeShowExpressiveUI(val showRefreshedUI: Boolean) : PreferredViewAction()
     data class ChangeShowLiveActivity(val showLiveActivity: Boolean) : PreferredViewAction()
+    data class ChangeBiometricAuth(val biometricAuth: Boolean, val isInstaller: Boolean) : PreferredViewAction()
     data class ChangeUseMiuix(val useMiuix: Boolean) : PreferredViewAction()
     data class ChangePreferSystemIcon(val preferSystemIcon: Boolean) : PreferredViewAction()
     data class ChangeShowLauncherIcon(val showLauncherIcon: Boolean) : PreferredViewAction()
@@ -43,13 +44,16 @@ sealed class PreferredViewAction {
     data class AddManagedSharedUserIdExemptedPackages(val pkg: NamedPackage) : PreferredViewAction()
     data class RemoveManagedSharedUserIdExemptedPackages(val pkg: NamedPackage) : PreferredViewAction()
 
+    data class ToggleGlobalUninstallFlag(val flag: Int, val enable: Boolean) : PreferredViewAction()
+
     data class SetAdbVerifyEnabledState(val enabled: Boolean) : PreferredViewAction()
     data object RequestIgnoreBatteryOptimization : PreferredViewAction()
     data object RefreshIgnoreBatteryOptimizationStatus : PreferredViewAction()
     data class SetDefaultInstaller(val lock: Boolean) : PreferredViewAction()
 
-    data class LabChangeShizukuHookMode(val enable: Boolean) : PreferredViewAction()
     data class LabChangeRootModuleFlash(val enable: Boolean) : PreferredViewAction()
+    data class LabChangeRootShowModuleArt(val enable: Boolean) : PreferredViewAction()
+    data class LabChangeRootModuleAlwaysUseRoot(val enable: Boolean) : PreferredViewAction()
     data class LabChangeRootImplementation(val implementation: RootImplementation) : PreferredViewAction()
     data class LabChangeHttpProfile(val profile: HttpProfile) : PreferredViewAction()
     data class LabChangeHttpSaveFile(val enable: Boolean) : PreferredViewAction()

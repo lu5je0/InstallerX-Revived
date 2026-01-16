@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.rosan.installer.R
 import com.rosan.installer.build.RsConfig
 import com.rosan.installer.build.model.entity.Manufacturer
-import com.rosan.installer.data.app.model.entity.RootImplementation
+import com.rosan.installer.data.app.model.enums.RootImplementation
 import com.rosan.installer.util.openUrl
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -40,11 +40,13 @@ import top.yukonga.miuix.kmp.basic.CardColors
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.basic.Check
-import top.yukonga.miuix.kmp.icon.icons.useful.Cancel
+import top.yukonga.miuix.kmp.icon.basic.Check
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -195,7 +197,7 @@ fun MiuixUpdateDialog(
                             context.openUrl("https://github.com/wxxsfxyzm/InstallerX-Revived/releases")
                             onDismiss()
                         },
-                        rightActions = {
+                        endActions = {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_link_icon),
                                 contentDescription = null
@@ -208,7 +210,7 @@ fun MiuixUpdateDialog(
                             context.openUrl("https://t.me/installerx_revived")
                             onDismiss()
                         },
-                        rightActions = {
+                        endActions = {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_link_icon),
                                 contentDescription = null
@@ -241,7 +243,7 @@ fun MiuixUninstallConfirmationDialog(
     onConfirm: () -> Unit,
     keepData: Boolean
 ) {
-    SuperDialog(
+    WindowDialog(
         show = showState,
         onDismissRequest = onDismiss,
         title = stringResource(R.string.suggestion_uninstall_alert_dialog_confirm_action),
@@ -303,9 +305,9 @@ fun ErrorDisplaySheet(
         show = showState,
         onDismissRequest = onDismissRequest,
         title = title,
-        leftAction = {
+        startAction = {
             MiuixBackButton(
-                icon = MiuixIcons.Useful.Cancel,
+                icon = MiuixIcons.Regular.Close,
                 onClick = onDismissRequest
             )
         }
@@ -460,4 +462,54 @@ private fun SelectableRow(
             tint = indicatorColor
         )
     }
+}
+
+@Composable
+fun MiuixUninstallPackageDialog(
+    showState: MutableState<Boolean>,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var packageName by remember { mutableStateOf("") }
+    val isConfirmEnabled = packageName.isNotBlank()
+
+    SuperDialog(
+        show = showState,
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.uninstall_enter_package_name),
+        content = {
+            Column {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextField(
+                    value = packageName,
+                    onValueChange = { packageName = it },
+                    label = stringResource(R.string.config_package_name),
+                    useLabelAsPlaceholder = true,
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    TextButton(
+                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.cancel),
+                        onClick = onDismiss
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.confirm),
+                        onClick = {
+                            onConfirm(packageName)
+                            packageName = ""
+                        },
+                        enabled = isConfirmEnabled,
+                        colors = ButtonDefaults.textButtonColorsPrimary()
+                    )
+                }
+            }
+        }
+    )
 }

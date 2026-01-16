@@ -3,19 +3,17 @@ package com.rosan.installer.ui.activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.colorResource
 import androidx.lifecycle.lifecycleScope
 import com.rosan.installer.R
 import com.rosan.installer.data.installer.model.entity.ProgressEntity
@@ -25,11 +23,7 @@ import com.rosan.installer.ui.activity.themestate.ThemeUiState
 import com.rosan.installer.ui.activity.themestate.createThemeUiStateFlow
 import com.rosan.installer.ui.page.main.installer.InstallerPage
 import com.rosan.installer.ui.page.miuix.installer.MiuixInstallerPage
-import com.rosan.installer.ui.theme.InstallerMaterialExpressiveTheme
-import com.rosan.installer.ui.theme.InstallerMiuixTheme
-import com.rosan.installer.ui.theme.m3color.ThemeMode
-import com.rosan.installer.ui.theme.m3color.dynamicColorScheme
-import com.rosan.installer.ui.theme.primaryLight
+import com.rosan.installer.ui.theme.InstallerTheme
 import com.rosan.installer.ui.util.PermissionDenialReason
 import com.rosan.installer.ui.util.PermissionManager
 import com.rosan.installer.util.toast
@@ -50,13 +44,15 @@ class UninstallerActivity : ComponentActivity(), KoinComponent {
     }
 
     private val appDataStore: AppDataStore by inject()
+    private var uiState by mutableStateOf(ThemeUiState())
 
     private var installer: InstallerRepo? = null
     private var job: Job? = null
 
     private lateinit var permissionManager: PermissionManager
 
-    private var uiState by mutableStateOf(ThemeUiState())
+    // Flag to track if the activity is stopped due to a permission request
+    private var isRequestingPermission = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -73,6 +69,12 @@ class UninstallerActivity : ComponentActivity(), KoinComponent {
         }
 
         permissionManager = PermissionManager(this)
+        // Setup the callback to intercept the settings launch event
+        permissionManager.onBeforeLaunchSettings = {
+            Timber.d("Launching settings for permission, preventing repo closure in onStop.")
+            isRequestingPermission = true
+        }
+
         val installerId = savedInstanceState?.getString(KEY_ID)
         installer = get { parametersOf(installerId) }
 
@@ -94,7 +96,8 @@ class UninstallerActivity : ComponentActivity(), KoinComponent {
 
             if (packageName.isNullOrBlank()) {
                 Timber.e("UninstallerActivity started without a package name.")
-                finish()
+                installer?.close()
+                this.finish()
                 return
             }
 
@@ -116,12 +119,26 @@ class UninstallerActivity : ComponentActivity(), KoinComponent {
 
     override fun onStop() {
         super.onStop()
+        // Check if the screen is currently on.
+        // If the screen is off, onStop is triggered by locking the device.
+        // We explicitly want to ignore this case.
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        val isScreenOn = powerManager.isInteractive
+
+        if (!isScreenOn) {
+            // The screen is turned off (locked), do nothing.
+            Timber.d("onStop: Screen is turned off. Ignoring.")
+            return
+        }
         // Only strictly interpret as user leaving when not finishing and not changing configurations (e.g., rotation)
-        if (!isFinishing && !isChangingConfigurations) {
+        if (!isFinishing && !isChangingConfigurations && !isRequestingPermission) {
             installer?.let { repo ->
                 Timber.d("onStop: User left UninstallerActivity. Closing repository.")
                 repo.close()
             }
+        } else if (isRequestingPermission) {
+            Timber.d("onStop: Ignored repo closure due to active permission request.")
+            isRequestingPermission = false
         }
     }
 
@@ -183,63 +200,19 @@ class UninstallerActivity : ComponentActivity(), KoinComponent {
                 return@setContent
             }
 
-            val useDarkTheme = when (uiState.themeMode) {
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-            }
-
-            val colorRes =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) colorResource(id = android.R.color.system_accent1_500) else primaryLight
-            val globalColorScheme = remember(uiState, useDarkTheme) {
-                // 1. If A12+ and Dynamic -> Use System Resource
-                // 2. Otherwise -> Use uiState.seedColor (which is now either Manual Color OR Wallpaper Color for A11)
-                val keyColor =
-                    if (uiState.useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) colorRes else uiState.seedColor
-
-                dynamicColorScheme(
-                    keyColor = keyColor,
-                    isDark = useDarkTheme,
-                    style = uiState.paletteStyle
-                )
-            }
-
-            val activeColorSchemeState = remember { mutableStateOf(globalColorScheme) }
-
-            LaunchedEffect(globalColorScheme) {
-                activeColorSchemeState.value = globalColorScheme
-            }
-
-            if (uiState.useMiuix) {
-                InstallerMiuixTheme(
-                    darkTheme = useDarkTheme,
-                    themeMode = uiState.themeMode,
-                    useMiuixMonet = uiState.useMiuixMonet,
-                    seedColor = activeColorSchemeState.value.primary
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        MiuixInstallerPage(
-                            installer = currentInstaller,
-                            activeColorSchemeState = activeColorSchemeState,
-                            globalColorScheme = globalColorScheme,
-                            isDarkMode = useDarkTheme,
-                            basePaletteStyle = uiState.paletteStyle
-                        )
-                    }
-                }
-            } else {
-                InstallerMaterialExpressiveTheme(
-                    darkTheme = useDarkTheme,
-                    colorScheme = activeColorSchemeState.value,
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        InstallerPage(
-                            installer = currentInstaller,
-                            activeColorSchemeState = activeColorSchemeState,
-                            globalColorScheme = globalColorScheme,
-                            isDarkMode = useDarkTheme,
-                            basePaletteStyle = uiState.paletteStyle
-                        )
+            InstallerTheme(
+                useMiuix = uiState.useMiuix,
+                themeMode = uiState.themeMode,
+                paletteStyle = uiState.paletteStyle,
+                useDynamicColor = uiState.useDynamicColor,
+                useMiuixMonet = uiState.useMiuixMonet,
+                seedColor = uiState.seedColor
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (uiState.useMiuix) {
+                        MiuixInstallerPage(installer = currentInstaller)
+                    } else {
+                        InstallerPage(installer = currentInstaller)
                     }
                 }
             }

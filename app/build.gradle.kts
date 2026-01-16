@@ -24,30 +24,31 @@ android {
         }
     }
     val storeFile = properties.getProperty("storeFile") ?: System.getenv("KEYSTORE_FILE")
-    val storePassword = properties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
+    val storePassword =
+        properties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
     val keyAlias = properties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
     val keyPassword = properties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
-    val hasCustomSigning = storeFile != null && storePassword != null && keyAlias != null && keyPassword != null
+    val hasCustomSigning =
+        storeFile != null && storePassword != null && keyAlias != null && keyPassword != null
 
     defaultConfig {
         // 你如果根据InstallerX的源码进行打包成apk或其他安装包格式
         // 请换一个applicationId，不要和官方的任何发布版本产生冲突。
         // If you use InstallerX source code, package it into apk or other installation package format
         // Please change the applicationId to one that does not conflict with any official release.
-        applicationId = "com.rosan.installer.x.revived"
+        applicationId = project.findProperty("APP_ID") as String?
+            ?: "com.rosan.installer.x.revived"
         namespace = "com.rosan.installer"
         minSdk = 26
         targetSdk = 36
         // Version control
         // Github Actions will automatically use versionName A.B.C+1 when building preview releases
         // update versionCode and versionName before manually trigger a stable release
-        versionCode = 43
-        versionName = "2.3.0"
+        versionCode = 45
+        versionName = project.findProperty("VERSION_NAME") as String?
+            ?: project.findProperty("BASE_VERSION") as String
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
 
         javaCompileOptions {
             annotationProcessorOptions {
@@ -153,12 +154,12 @@ android {
     }
 
     compileOptions {
-        targetCompatibility = JavaVersion.VERSION_21
-        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_25
+        sourceCompatibility = JavaVersion.VERSION_25
     }
 
     kotlin {
-        jvmToolchain(21)
+        jvmToolchain(25)
     }
 
     buildFeatures {
@@ -194,8 +195,8 @@ room {
 
 dependencies {
     compileOnly(project(":hidden-api"))
-
     implementation(libs.androidx.core)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.datastore.preferences)
@@ -219,7 +220,7 @@ dependencies {
     implementation(libs.ktx.serializationJson)
     implementation(libs.kotlin.reflect)
 
-    implementation(libs.lsposed.hiddenapibypass)
+    implementation(libs.hiddenapibypass)
 
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.core)
@@ -247,6 +248,7 @@ dependencies {
 
     // miuix
     implementation(libs.miuix)
+    implementation(libs.miuix.icons)
     implementation(libs.capsule)
     // haze
     implementation(libs.haze)

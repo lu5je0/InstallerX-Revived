@@ -8,18 +8,14 @@ import android.os.PowerManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.colorResource
 import androidx.lifecycle.lifecycleScope
 import com.rosan.installer.R
 import com.rosan.installer.build.RsConfig
@@ -33,11 +29,7 @@ import com.rosan.installer.ui.activity.themestate.createThemeUiStateFlow
 import com.rosan.installer.ui.common.LocalMiPackageInstallerPresent
 import com.rosan.installer.ui.page.main.installer.InstallerPage
 import com.rosan.installer.ui.page.miuix.installer.MiuixInstallerPage
-import com.rosan.installer.ui.theme.InstallerMaterialExpressiveTheme
-import com.rosan.installer.ui.theme.InstallerMiuixTheme
-import com.rosan.installer.ui.theme.m3color.ThemeMode
-import com.rosan.installer.ui.theme.m3color.dynamicColorScheme
-import com.rosan.installer.ui.theme.primaryLight
+import com.rosan.installer.ui.theme.InstallerTheme
 import com.rosan.installer.ui.util.PermissionDenialReason
 import com.rosan.installer.ui.util.PermissionManager
 import com.rosan.installer.util.toast
@@ -60,13 +52,15 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
     }
 
     private val appDataStore: AppDataStore by inject()
+    private var uiState by mutableStateOf(ThemeUiState())
 
     private var installer by mutableStateOf<InstallerRepo?>(null)
     private var job: Job? = null
 
     private lateinit var permissionManager: PermissionManager
 
-    private var uiState by mutableStateOf(ThemeUiState())
+    // Flag to track if the activity is stopped due to a permission request
+    private var isRequestingPermission = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (RsConfig.isDebug && RsConfig.LEVEL == Level.UNSTABLE)
@@ -85,6 +79,11 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
         }
 
         permissionManager = PermissionManager(this)
+        // Setup the callback to intercept the settings launch event
+        permissionManager.onBeforeLaunchSettings = {
+            Timber.d("Launching settings for permission, preventing repo closure in onStop.")
+            isRequestingPermission = true
+        }
 
         Timber.d("onCreate: Handling all flows via restoreInstaller and action dispatch.")
         restoreInstaller(savedInstanceState)
@@ -186,6 +185,8 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
 
     override fun onStop() {
         super.onStop()
+
+        if (BiometricsAuthenticationActivity.onActivityReady != null) return
         // Check if the screen is currently on.
         // If the screen is off, onStop is triggered by locking the device.
         // We explicitly want to ignore this case.
@@ -199,7 +200,7 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
         }
         // Only strictly interpret as user leaving when not finishing and not changing configurations (e.g., rotation)
         // TODO add a flag to handle Session Install Confirmation
-        if (!isFinishing && !isChangingConfigurations) {
+        if (!isFinishing && !isChangingConfigurations && !isRequestingPermission) {
             installer?.let { repo ->
                 // If using session install, we don't hide UI since oems have different package installer impls
                 // if (repo.config.authorizer == ConfigEntity.Authorizer.None) return
@@ -212,13 +213,15 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
                 if (currentProgress !is ProgressEntity.Finish &&
                     currentProgress !is ProgressEntity.Error
                 ) {
-
                     Timber.d("onStop: User left activity. Triggering background mode.")
 
                     // Trigger background mode
                     repo.background(true)
                 }
             }
+        } else if (isRequestingPermission) {
+            Timber.d("onStop: Ignored background trigger due to active permission request.")
+            isRequestingPermission = false
         }
     }
 
@@ -280,69 +283,24 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
             val capabilityChecker = koinInject<DeviceCapabilityChecker>()
 
             if (background || progress is ProgressEntity.Ready || progress is ProgressEntity.InstallResolving || progress is ProgressEntity.Finish)
-            // Return@setContent to show nothing, logs will explain why.
                 return@setContent
 
-            val useDarkTheme = when (uiState.themeMode) {
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-            }
-
-            val colorRes =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) colorResource(id = android.R.color.system_accent1_500) else primaryLight
-            val globalColorScheme = remember(uiState, useDarkTheme) {
-                // 1. If A12+ and Dynamic -> Use System Resource
-                // 2. Otherwise -> Use uiState.seedColor (which is now either Manual Color OR Wallpaper Color for A11)
-                val keyColor =
-                    if (uiState.useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) colorRes else uiState.seedColor
-
-                dynamicColorScheme(
-                    keyColor = keyColor,
-                    isDark = useDarkTheme,
-                    style = uiState.paletteStyle
-                )
-            }
-
-            val activeColorSchemeState = remember { mutableStateOf(globalColorScheme) }
-
-            LaunchedEffect(globalColorScheme) {
-                activeColorSchemeState.value = globalColorScheme
-            }
-
-            CompositionLocalProvider(
-                LocalMiPackageInstallerPresent provides capabilityChecker.hasMiPackageInstaller
+            InstallerTheme(
+                useMiuix = uiState.useMiuix,
+                themeMode = uiState.themeMode,
+                paletteStyle = uiState.paletteStyle,
+                useDynamicColor = uiState.useDynamicColor,
+                useMiuixMonet = uiState.useMiuixMonet,
+                seedColor = uiState.seedColor
             ) {
-                if (uiState.useMiuix) {
-                    InstallerMiuixTheme(
-                        darkTheme = useDarkTheme,
-                        themeMode = uiState.themeMode,
-                        useMiuixMonet = uiState.useMiuixMonet,
-                        seedColor = activeColorSchemeState.value.primary
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            MiuixInstallerPage(
-                                installer = installer,
-                                activeColorSchemeState = activeColorSchemeState,
-                                globalColorScheme = globalColorScheme,
-                                isDarkMode = useDarkTheme,
-                                basePaletteStyle = uiState.paletteStyle
-                            )
-                        }
-                    }
-                } else {
-                    InstallerMaterialExpressiveTheme(
-                        darkTheme = useDarkTheme,
-                        colorScheme = activeColorSchemeState.value,
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            InstallerPage(
-                                installer = installer,
-                                activeColorSchemeState = activeColorSchemeState,
-                                globalColorScheme = globalColorScheme,
-                                isDarkMode = useDarkTheme,
-                                basePaletteStyle = uiState.paletteStyle
-                            )
+                CompositionLocalProvider(
+                    LocalMiPackageInstallerPresent provides capabilityChecker.hasMiPackageInstaller
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (uiState.useMiuix) {
+                            MiuixInstallerPage(installer = installer)
+                        } else {
+                            InstallerPage(installer = installer)
                         }
                     }
                 }
@@ -352,22 +310,21 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
 
     private fun logIntentDetails(tag: String, intent: Intent?) {
         if (intent == null) {
-            Timber.tag(tag).d("Intent is null")
+            Timber.d("$tag: Intent is null")
             return
         }
-        val flags = intent.flags
-        val hexFlags = String.format("0x%08X", flags)
-
-        Timber.tag(tag).d("---------- Intent Details Start ----------")
-        Timber.tag(tag).d("Full Intent: $intent")
-        Timber.tag(tag).d("Action: ${intent.action}")
-        Timber.tag(tag).d("Data: ${intent.dataString}")
-        Timber.tag(tag).d("Type: ${intent.type}")
-        Timber.tag(tag).d("Categories: ${intent.categories?.joinToString(", ")}")
-        Timber.tag(tag).d("Flags (Decimal): $flags")
-        Timber.tag(tag).d("Flags (Hex): $hexFlags")
-        Timber.tag(tag).d("Component: ${intent.component}")
-        Timber.tag(tag).d("Extras: ${intent.extras?.keySet()?.joinToString(", ")}")
-        Timber.tag(tag).d("---------- Intent Details End ----------")
+        Timber.d("$tag: Action: ${intent.action}")
+        Timber.d("$tag: Data: ${intent.dataString}")
+        Timber.d("$tag: Flags: ${Integer.toHexString(intent.flags)}")
+        intent.extras?.let { extras ->
+            for (key in extras.keySet()) {
+                // Use get(key) instead of getString(key) to avoid ClassCastException
+                // on non-string values (e.g. SESSION_ID is an Integer).
+                // Although get(key) is deprecated in newer APIs, it is the only way
+                // to generically log unknown types without suppressions or reflection.
+                val value = extras.get(key)
+                Timber.d("$tag: Extra: $key = $value")
+            }
+        }
     }
 }

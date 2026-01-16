@@ -1,6 +1,10 @@
 package com.rosan.installer.ui.page.miuix.widgets
 
 import androidx.annotation.StringRes
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -42,11 +46,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rosan.installer.R
+import com.rosan.installer.data.app.util.PackageManagerUtil
 import com.rosan.installer.data.settings.model.datastore.entity.NamedPackage
 import com.rosan.installer.data.settings.model.datastore.entity.SharedUid
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
 import com.rosan.installer.ui.common.LocalSessionInstallSupported
 import com.rosan.installer.ui.icons.AppIcons
+import com.rosan.installer.ui.page.main.settings.preferred.PreferredViewAction
+import com.rosan.installer.ui.page.main.settings.preferred.PreferredViewModel
 import com.rosan.installer.ui.theme.m3color.ThemeMode
 import com.rosan.installer.ui.util.MIN_FEEDBACK_DURATION_MS
 import com.rosan.installer.ui.util.formatSize
@@ -58,7 +65,9 @@ import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -522,7 +531,7 @@ fun MiuixManagedPackagesWidget(
                 BasicComponent(
                     title = item.name,
                     summary = item.packageName,
-                    rightActions = {
+                    endActions = {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
@@ -576,12 +585,22 @@ fun MiuixManagedPackagesWidget(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            TextButton(
+            Button(
                 modifier = Modifier.padding(bottom = 8.dp),
-                text = stringResource(R.string.add),
                 onClick = { showAddDialog = true },
-                colors = ButtonDefaults.textButtonColorsPrimary()
-            )
+                colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = AppIcons.Add,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.add),
+                    color = MiuixTheme.colorScheme.primary
+                )
+            }
         }
     }
 
@@ -805,7 +824,7 @@ fun MiuixManagedUidsWidget(
                 BasicComponent(
                     title = item.uidName,
                     summary = "UID: ${item.uidValue}",
-                    rightActions = {
+                    endActions = {
                         // Custom delete button
                         Box(
                             modifier = Modifier
@@ -834,12 +853,22 @@ fun MiuixManagedUidsWidget(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.End
         ) {
-            TextButton(
+            Button(
                 modifier = Modifier.padding(bottom = 8.dp),
-                text = stringResource(R.string.add),
                 onClick = { showAddDialog = true },
-                colors = ButtonDefaults.textButtonColorsPrimary()
-            )
+                colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f))
+            ) {
+                Icon(
+                    imageVector = AppIcons.Add,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.add),
+                    color = MiuixTheme.colorScheme.primary
+                )
+            }
         }
     }
 
@@ -982,4 +1011,64 @@ private fun MiuixDeleteSharedUidConfirmationDialog(
             }
         }
     )
+}
+
+@Composable
+fun MiuixUninstallKeepDataWidget(viewModel: PreferredViewModel) {
+    MiuixSwitchWidget(
+        title = stringResource(id = R.string.uninstall_keep_data),
+        description = stringResource(id = R.string.uninstall_keep_data_desc),
+        checked = (viewModel.state.uninstallFlags and PackageManagerUtil.DELETE_KEEP_DATA) != 0,
+        onCheckedChange = {
+            viewModel.dispatch(PreferredViewAction.ToggleGlobalUninstallFlag(PackageManagerUtil.DELETE_KEEP_DATA, it))
+        }
+    )
+}
+
+@Composable
+fun MiuixUninstallForAllUsersWidget(viewModel: PreferredViewModel) {
+    MiuixSwitchWidget(
+        icon = AppIcons.InstallForAllUsers,
+        title = stringResource(id = R.string.uninstall_all_users),
+        description = stringResource(id = R.string.uninstall_all_users_desc),
+        checked = (viewModel.state.uninstallFlags and PackageManagerUtil.DELETE_ALL_USERS) != 0,
+        onCheckedChange = {
+            viewModel.dispatch(PreferredViewAction.ToggleGlobalUninstallFlag(PackageManagerUtil.DELETE_ALL_USERS, it))
+        }
+    )
+}
+
+@Composable
+fun MiuixUninstallSystemAppWidget(viewModel: PreferredViewModel) {
+    MiuixSwitchWidget(
+        title = stringResource(id = R.string.uninstall_delete_system_app),
+        description = stringResource(id = R.string.uninstall_delete_system_app_desc),
+        checked = (viewModel.state.uninstallFlags and PackageManagerUtil.DELETE_SYSTEM_APP) != 0,
+        onCheckedChange = {
+            viewModel.dispatch(
+                PreferredViewAction.ToggleGlobalUninstallFlag(
+                    PackageManagerUtil.DELETE_SYSTEM_APP,
+                    it
+                )
+            )
+        }
+    )
+}
+
+@Composable
+fun MiuixUninstallRequireBiometricAuthWidget(viewModel: PreferredViewModel) {
+    if (BiometricManager
+            .from(LocalContext.current)
+            .canAuthenticate(BIOMETRIC_WEAK or BIOMETRIC_STRONG or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+    ) {
+        MiuixSwitchWidget(
+            icon = AppIcons.BiometricAuth,
+            title = stringResource(R.string.uninstaller_settings_require_biometric_auth),
+            description = stringResource(R.string.uninstaller_settings_require_biometric_auth_desc),
+            checked = viewModel.state.uninstallerRequireBiometricAuth,
+            onCheckedChange = {
+                viewModel.dispatch(PreferredViewAction.ChangeBiometricAuth(it, false))
+            }
+        )
+    }
 }

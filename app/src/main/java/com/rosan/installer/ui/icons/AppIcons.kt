@@ -3,7 +3,9 @@ package com.rosan.installer.ui.icons
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.twotone.ArrowBack
 import androidx.compose.material.icons.automirrored.twotone.ArrowRight
+import androidx.compose.material.icons.automirrored.twotone.Article
 import androidx.compose.material.icons.automirrored.twotone.FactCheck
 import androidx.compose.material.icons.automirrored.twotone.MenuOpen
 import androidx.compose.material.icons.automirrored.twotone.PlaylistAdd
@@ -24,24 +26,27 @@ import androidx.compose.material.icons.twotone.AccountCircle
 import androidx.compose.material.icons.twotone.Add
 import androidx.compose.material.icons.twotone.AdminPanelSettings
 import androidx.compose.material.icons.twotone.Android
-import androidx.compose.material.icons.twotone.ArrowBackIosNew
 import androidx.compose.material.icons.twotone.ArrowDropDown
 import androidx.compose.material.icons.twotone.ArrowUpward
 import androidx.compose.material.icons.twotone.AutoAwesome
 import androidx.compose.material.icons.twotone.AutoFixHigh
 import androidx.compose.material.icons.twotone.Badge
 import androidx.compose.material.icons.twotone.BatterySaver
+import androidx.compose.material.icons.twotone.Bolt
 import androidx.compose.material.icons.twotone.BugReport
 import androidx.compose.material.icons.twotone.ClearAll
 import androidx.compose.material.icons.twotone.Close
+import androidx.compose.material.icons.twotone.Code
 import androidx.compose.material.icons.twotone.ColorLens
 import androidx.compose.material.icons.twotone.Compress
+import androidx.compose.material.icons.twotone.Copyright
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.DeveloperMode
 import androidx.compose.material.icons.twotone.DoNotDisturbOnTotalSilence
 import androidx.compose.material.icons.twotone.Downloading
 import androidx.compose.material.icons.twotone.Edit
 import androidx.compose.material.icons.twotone.Expand
+import androidx.compose.material.icons.twotone.Extension
 import androidx.compose.material.icons.twotone.Face
 import androidx.compose.material.icons.twotone.Favorite
 import androidx.compose.material.icons.twotone.FavoriteBorder
@@ -52,9 +57,11 @@ import androidx.compose.material.icons.twotone.HourglassEmpty
 import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.KeyboardArrowDown
 import androidx.compose.material.icons.twotone.LibraryAddCheck
+import androidx.compose.material.icons.twotone.LocalPolice
 import androidx.compose.material.icons.twotone.Memory
 import androidx.compose.material.icons.twotone.People
 import androidx.compose.material.icons.twotone.PermDeviceInformation
+import androidx.compose.material.icons.twotone.Policy
 import androidx.compose.material.icons.twotone.Refresh
 import androidx.compose.material.icons.twotone.RocketLaunch
 import androidx.compose.material.icons.twotone.RoomPreferences
@@ -88,6 +95,8 @@ object AppIcons {
     val BugReport = Icons.TwoTone.BugReport
     val Terminal = Icons.TwoTone.Terminal
     val Launcher = Icons.TwoTone.RocketLaunch
+    val RootMethod = Icons.TwoTone.Extension
+    val FlashPreferRoot = Icons.TwoTone.Bolt
     val History = Icons.TwoTone.History
     val Lab = Icons.TwoTone.Science
     val Suggestion = Icons.TwoTone.AutoAwesome
@@ -99,11 +108,13 @@ object AppIcons {
     val AutoFixHigh = Icons.TwoTone.AutoFixHigh
     val Developer = Icons.TwoTone.DeveloperMode
     val Theme = Icons.TwoTone.ColorLens
+    val ViewSourceCode = Icons.TwoTone.Code
+    val OpenSourceLicense = Icons.TwoTone.Copyright
 
     // --- 导航图标集合 ---
     val RoomPreferences = Icons.TwoTone.RoomPreferences
     val SettingsSuggest = Icons.TwoTone.SettingsSuggest
-    val ArrowBack = Icons.TwoTone.ArrowBackIosNew
+    val ArrowBack = Icons.AutoMirrored.TwoTone.ArrowBack
     // --- 导航图标结束 ---
 
     // --- 授权器图标集合 ---
@@ -137,6 +148,7 @@ object AppIcons {
     val UnlockDefault = Icons.TwoTone.FavoriteBorder
     val ClearAll = Icons.TwoTone.ClearAll
     val LiveActivity = Icons.AutoMirrored.TwoTone.Send
+    val BiometricAuth = Icons.TwoTone.Badge
     val IconPack = Icons.TwoTone.Widgets
     val Silent = Icons.TwoTone.DoNotDisturbOnTotalSilence
     val OEMSpecial = Icons.TwoTone.FindInPage
@@ -146,6 +158,7 @@ object AppIcons {
     // --- Profile pkg 图标集合 ---
     val InstallUser = Icons.TwoTone.AccountCircle
     val InstallPackageSource = Icons.TwoTone.Source
+    val InstallReason = Icons.AutoMirrored.TwoTone.Article
     val InstallSource = Icons.TwoTone.Face
     val InstallSourceInput = Icons.TwoTone.Badge
     val InstallForAllUsers = Icons.TwoTone.People

@@ -11,9 +11,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rosan.installer.R
 import com.rosan.installer.data.app.model.entity.AppEntity
-import com.rosan.installer.data.app.model.entity.DataType
 import com.rosan.installer.data.app.model.entity.PackageAnalysisResult
+import com.rosan.installer.data.app.model.enums.DataType
 import com.rosan.installer.data.app.repo.AppIconRepo
 import com.rosan.installer.data.app.util.InstallOption
 import com.rosan.installer.data.app.util.PackageManagerUtil
@@ -25,7 +26,7 @@ import com.rosan.installer.data.recycle.model.impl.PrivilegedManager
 import com.rosan.installer.data.settings.model.datastore.AppDataStore
 import com.rosan.installer.data.settings.model.datastore.entity.NamedPackage
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
-import com.rosan.installer.data.settings.util.ConfigUtil.Companion.readGlobal
+import com.rosan.installer.data.settings.util.ConfigUtil.readGlobal
 import com.rosan.installer.util.getErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +88,8 @@ class InstallerViewModel(
             is InstallerViewState.Analysing,
             is InstallerViewState.Resolving,
             is InstallerViewState.InstallExtendedMenu,
-            is InstallerViewState.InstallChoice -> false
+            is InstallerViewState.InstallChoice,
+            is InstallerViewState.Uninstalling -> false
 
             is InstallerViewState.InstallingModule -> (state as InstallerViewState.InstallingModule).isFinished
             is InstallerViewState.InstallPrepare -> !(showMiuixSheetRightActionSettings || showMiuixPermissionList)
@@ -186,8 +188,12 @@ class InstallerViewModel(
             is InstallerViewAction.InstallMultiple -> installMultiple()
             is InstallerViewAction.Install -> install()
             is InstallerViewAction.Background -> background()
-            is InstallerViewAction.Reboot -> rebootDevice(action.reason)
-            is InstallerViewAction.UninstallAndRetryInstall -> uninstallAndRetryInstall(action.keepData)
+            is InstallerViewAction.Reboot -> repo.reboot(action.reason)
+            is InstallerViewAction.UninstallAndRetryInstall -> uninstallAndRetryInstall(
+                action.keepData,
+                action.conflictingPackage
+            )
+
             is InstallerViewAction.Uninstall -> {
                 // Trigger uninstall using the package name from the collected info
                 repo.uninstallInfo.value?.packageName?.let { repo.uninstall(it) }
@@ -198,24 +204,8 @@ class InstallerViewModel(
             is InstallerViewAction.ShowMiuixPermissionList -> showMiuixPermissionList = true
             is InstallerViewAction.HideMiuixPermissionList -> showMiuixPermissionList = false
 
-            is InstallerViewAction.ToggleSelection -> toggleSelection(
-                action.packageName,
-                action.entity,
-                action.isMultiSelect
-            )
-
-            is InstallerViewAction.ToggleUninstallFlag -> {
-                // Update the uninstall flags bitmask
-                val currentFlags = _uninstallFlags.value
-                _uninstallFlags.value = if (action.enable) {
-                    currentFlags or action.flag
-                } else {
-                    currentFlags and action.flag.inv()
-                }
-                // Sync to the repo config so the backend uses the flags
-                repo.config.uninstallFlags = _uninstallFlags.value
-            }
-
+            is InstallerViewAction.ToggleSelection -> toggleSelection(action.packageName, action.entity, action.isMultiSelect)
+            is InstallerViewAction.ToggleUninstallFlag -> toggleUninstallFlag(action.flag, action.enable)
             is InstallerViewAction.SetInstaller -> selectInstaller(action.installer)
             is InstallerViewAction.SetTargetUser -> selectTargetUser(action.userId)
             is InstallerViewAction.ApproveSession -> repo.approveConfirmation(action.sessionId, action.granted)
@@ -225,6 +215,8 @@ class InstallerViewModel(
     private fun loadInitialSettings() =
         viewModelScope.launch {
             viewSettings = viewSettings.copy(
+                uiExpressive =
+                    appDataStore.getBoolean(AppDataStore.UI_EXPRESSIVE_SWITCH, true).first(),
                 preferSystemIconForUpdates =
                     appDataStore.getBoolean(AppDataStore.PREFER_SYSTEM_ICON_FOR_INSTALL, false).first(),
                 autoCloseCountDown =
@@ -369,7 +361,7 @@ class InstallerViewModel(
             is ProgressEntity.UninstallSuccess -> {
                 if (isRetryingInstall) {
                     isRetryingInstall = false
-                    repo.install() // Trigger reinstall
+                    repo.install(false) // Trigger reinstall
                     InstallerViewState.InstallRetryDowngradeUsingUninstall
                 } else {
                     InstallerViewState.UninstallSuccess
@@ -379,8 +371,7 @@ class InstallerViewModel(
             is ProgressEntity.UninstallReady -> {
                 // This state has side effects (updating UI-specific state), so they are handled here.
                 _uiUninstallInfo.value = repo.uninstallInfo.value
-                _uninstallFlags.value = 0
-                repo.config.uninstallFlags = 0
+                _uninstallFlags.value = repo.config.uninstallFlags
                 InstallerViewState.UninstallReady
             }
 
@@ -693,30 +684,12 @@ class InstallerViewModel(
         }
     }
 
-    private fun rebootDevice(reason: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val cmd = if (reason == "recovery") {
-                // KEYCODE_POWER = 26. This hides the incorrect "Factory data reset" message
-                // on some devices when booting into recovery.
-                "input keyevent 26 ; svc power reboot $reason || reboot $reason"
-            } else {
-                val reasonArg = if (reason.isNotEmpty()) " $reason" else ""
-                // Try "svc power reboot" first (soft reboot), fallback to "reboot" (hard reboot)
-                "svc power reboot$reasonArg || reboot$reasonArg"
-            }
-
-            val commandArray = arrayOf("sh", "-c", cmd)
-
-            PrivilegedManager.execArr(repo.config, commandArray)
-        }
-    }
-
     fun toast(message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun toast(@StringRes resId: Int) {
-        Toast.makeText(context, resId, Toast.LENGTH_LONG).show()
+        Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
     }
 
     private fun close() {
@@ -807,7 +780,7 @@ class InstallerViewModel(
     private fun install() {
         autoInstallJob?.cancel()
         Timber.d("Standard foreground installation triggered. Contains Module: $isInstallingModule")
-        repo.install()
+        repo.install(true)
     }
 
     private fun background() {
@@ -847,9 +820,35 @@ class InstallerViewModel(
         }
     }
 
-    private fun uninstallAndRetryInstall(keepData: Boolean) {
-        val packageName = _currentPackageName.value
-        if (packageName == null) {
+    private fun toggleUninstallFlag(flag: Int, enable: Boolean) {
+        val currentFlags = _uninstallFlags.value
+        var newFlags = currentFlags
+
+        if (enable) {
+            newFlags = newFlags or flag
+
+            if (flag == PackageManagerUtil.DELETE_ALL_USERS) {
+                if ((currentFlags and PackageManagerUtil.DELETE_SYSTEM_APP) != 0) {
+                    newFlags = newFlags and PackageManagerUtil.DELETE_SYSTEM_APP.inv()
+                    toast(R.string.uninstall_system_app_disabled)
+                }
+            } else if (flag == PackageManagerUtil.DELETE_SYSTEM_APP) {
+                if ((currentFlags and PackageManagerUtil.DELETE_ALL_USERS) != 0) {
+                    newFlags = newFlags and PackageManagerUtil.DELETE_ALL_USERS.inv()
+                    toast(R.string.uninstall_all_users_disabled)
+                }
+            }
+        } else newFlags = newFlags and flag.inv()
+
+        if (newFlags != currentFlags) {
+            _uninstallFlags.value = newFlags
+            repo.config.uninstallFlags = newFlags
+        }
+    }
+
+    private fun uninstallAndRetryInstall(keepData: Boolean, conflictingPackage: String?) {
+        val targetPackageName = conflictingPackage ?: _currentPackageName.value
+        if (targetPackageName == null) {
             toast("R.string.error_no_package_to_uninstall")
             return
         }
@@ -859,7 +858,8 @@ class InstallerViewModel(
 
         // Set the flag before starting the operation
         isRetryingInstall = true
-        repo.uninstall(packageName)
+        Timber.d("Uninstalling conflicting/old package: $targetPackageName for retry")
+        repo.uninstall(targetPackageName)
     }
 
     /**

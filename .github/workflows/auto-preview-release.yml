@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -28,31 +28,35 @@ jobs:
         id: commit_sha
         run: echo "SHORT_SHA=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '21'
-          # cache: gradle 已移除
+          java-version: '25'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           # 主分支构建允许更新缓存
           cache-read-only: false
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
       - name: Update versionName format
         id: version
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(grep -oP 'versionName = "\K([0-9]+\.[0-9]+\.[0-9]+)' app/build.gradle.kts)
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          VERSION=$(./gradlew -q properties | grep '^BASE_VERSION:' | awk '{print $2}')
           A=$(echo $VERSION | cut -d. -f1)
           B=$(echo $VERSION | cut -d. -f2)
           C=$(echo $VERSION | cut -d. -f3)
           C_NEW=$((C + 1))
           NEW_VERSION="${A}.${B}.${C_NEW}.${{ steps.commit_sha.outputs.SHORT_SHA }}"
-          sed -i "s/versionName = \".*\"/versionName = \"${NEW_VERSION}\"/" app/build.gradle.kts
-          echo "VNEW_VERSION=v${A}.${B}.${C_NEW}" >> $GITHUB_OUTPUT
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "Generated Version: $NEW_VERSION"
 
       - name: Decode and set up signing key
         run: |
@@ -63,17 +67,17 @@ jobs:
           echo "keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}" >> keystore.properties
           echo "storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}" >> keystore.properties
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
-
       - name: Build Preview Release APKs
-        run: ./gradlew assembleOnlinePreviewRelease assembleOfflinePreviewRelease
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew assembleOnlinePreviewRelease assembleOfflinePreviewRelease -PVERSION_NAME="${{ env.NEW_VERSION }}"
 
       - name: Find and Rename Preview APKs
         id: rename_apks
         run: |
           PROJECT_NAME="InstallerX-Revived"
-          VERSION_TAG="${{ steps.version.outputs.VNEW_VERSION }}.${{ steps.commit_sha.outputs.SHORT_SHA }}"
+          VERSION_TAG="v${{ env.NEW_VERSION }}"
 
           ONLINE_APK_DIR="app/build/outputs/apk/onlinePreview/release/"
           OFFLINE_APK_DIR="app/build/outputs/apk/offlinePreview/release/"
@@ -103,19 +107,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST_TAG=$(git tag --list "*-alpha-latest" | sort -Vr | head -n 1)
+          LATEST_TAG=$(git tag --list "*-alpha" | sort -Vr | head -n 1)
           if [[ -n "$LATEST_TAG" ]]; then
             gh release delete "$LATEST_TAG" --yes || echo "No previous alpha release found to delete."
             git push origin --delete "$LATEST_TAG" || echo "No previous alpha tag found to delete."
           else
-            echo "No alpha-latest tag to delete."
+            echo "No alpha tag to delete."
           fi
 
       - name: Generate changelog
         id: changelog
         run: |
           PREV_TAG=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -Vr | head -n 1)
-          CURR_TAG="${{ steps.version.outputs.VNEW_VERSION }}-alpha-latest"
+          CURR_TAG="v${{ env.NEW_VERSION }}-alpha"
 
           if [ -z "$PREV_TAG" ]; then
             LOG_RANGE=""
@@ -162,7 +166,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "InstallerX Revived Alpha (${{ steps.commit_sha.outputs.SHORT_SHA }})"
-          tag_name: "${{ steps.version.outputs.VNEW_VERSION }}-alpha-latest"
+          tag_name: "v${{ env.NEW_VERSION }}-alpha"
           target_commitish: ${{ github.sha }}
           body: |
             ## 这是自动构建的最新 Alpha 测试版。

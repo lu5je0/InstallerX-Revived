@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -25,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import com.rosan.installer.R
 import com.rosan.installer.data.app.model.entity.AppEntity
 import com.rosan.installer.data.installer.model.entity.InstallResult
+import com.rosan.installer.ui.icons.AppMiuixIcons
+import com.rosan.installer.ui.theme.LocalIsDark
 import com.rosan.installer.ui.theme.miuixSheetCardColorDark
 import com.rosan.installer.ui.util.isGestureNavigation
 import com.rosan.installer.util.help
@@ -35,9 +36,6 @@ import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Cancel
-import top.yukonga.miuix.kmp.icon.icons.useful.Confirm
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.isDynamicColor
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -45,11 +43,10 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 fun InstallCompletedContent(
-    colorScheme: ColorScheme,
-    isDarkMode: Boolean,
     results: List<InstallResult>,
     onClose: () -> Unit
 ) {
+    val isDarkMode = LocalIsDark.current
     val filteredResults = remember(results) {
         results
             // 1. Group by packageName
@@ -82,7 +79,6 @@ fun InstallCompletedContent(
             ) {
                 items(filteredResults, key = { it.entity.app.packageName + it.entity.app.name }) { result ->
                     MiuixResultItemCard(
-                        colorScheme = colorScheme,
                         isDarkMode = isDarkMode,
                         result = result
                     )
@@ -109,12 +105,11 @@ fun InstallCompletedContent(
 @Composable
 private fun MiuixResultItemCard(
     result: InstallResult,
-    colorScheme: ColorScheme,
     isDarkMode: Boolean
 ) {
     val app = result.entity.app
     val appLabel = (app as? AppEntity.BaseEntity)?.label ?: app.packageName
-    val cardColor = if (isDynamicColor) colorScheme.surfaceContainer else
+    val cardColor = if (isDynamicColor) MiuixTheme.colorScheme.surfaceContainer else
         if (isDarkMode) miuixSheetCardColorDark else Color.White
 
     Card(
@@ -156,7 +151,7 @@ private fun MiuixSuccessRow() {
         modifier = Modifier.fillMaxWidth()
     ) {
         Icon(
-            imageVector = MiuixIcons.Useful.Confirm,
+            imageVector = AppMiuixIcons.Ok,
             contentDescription = "Success",
             tint = MiuixTheme.colorScheme.primary
         )
@@ -185,7 +180,7 @@ private fun MiuixCompletedErrorCardContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
-                imageVector = MiuixIcons.Useful.Cancel,
+                imageVector = AppMiuixIcons.Close,
                 contentDescription = stringResource(R.string.installer_install_failed),
                 tint = contentColor
             )

@@ -30,7 +30,7 @@ fun AppBackButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector = AppIcons.ArrowBack, // Default icon is ArrowBack
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.1f),
     contentDescription: String = stringResource(id = R.string.back)
 ) {
     IconButton(
@@ -38,7 +38,6 @@ fun AppBackButton(
         modifier = modifier,
         // Consistent shapes for the button.
         shapes = IconButtonDefaults.shapes(
-            // You can use the default standard shapes directly if they fit your needs
             // shape = CircleShape
         ),
         // Consistent colors for the button.

@@ -1,6 +1,10 @@
 package com.rosan.installer.ui.page.main.widget.setting
 
 import androidx.annotation.StringRes
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -62,8 +66,9 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.rosan.installer.R
-import com.rosan.installer.data.app.model.entity.HttpProfile
-import com.rosan.installer.data.app.model.entity.RootImplementation
+import com.rosan.installer.data.app.model.enums.HttpProfile
+import com.rosan.installer.data.app.model.enums.RootImplementation
+import com.rosan.installer.data.app.util.PackageManagerUtil
 import com.rosan.installer.data.settings.model.datastore.entity.NamedPackage
 import com.rosan.installer.data.settings.model.datastore.entity.SharedUid
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
@@ -324,37 +329,38 @@ fun AutoClearNotificationTimeWidget(
     currentValue: Int,
     onValueChange: (Int) -> Unit
 ) {
-    val context = LocalContext.current
-    // Define the options for consistency
     val options = remember { listOf(0, 3, 5, 10, 15, 20, 30) }
 
-    // Create display strings for the dropdown menu
-    val displayStrings = remember(options) {
-        options.map { time ->
-            if (time == 0) {
-                context.getString(R.string.installer_settings_auto_clear_time_never)
-            } else {
-                context.getString(R.string.installer_settings_auto_clear_time_seconds_format, time)
-            }
-        }
-    }
-
-    // Find the index of the current value
     val selectedIndex = remember(currentValue, options) {
         options.indexOf(currentValue).coerceAtLeast(0)
     }
+    val currentOption = options.getOrElse(selectedIndex) { 0 }
 
-    // Determine the description text based on the current value
-    val descriptionText = displayStrings.getOrElse(selectedIndex) { "" }
+    val descriptionText = if (currentOption == 0) {
+        stringResource(R.string.installer_settings_auto_clear_time_never_desc)
+    } else {
+        stringResource(
+            R.string.installer_settings_auto_clear_time_seconds_format_desc,
+            currentOption
+        )
+    }
+
+    val dropdownItems = options.map { time ->
+        if (time == 0) {
+            stringResource(R.string.installer_settings_auto_clear_time_never)
+        } else {
+            stringResource(R.string.installer_settings_auto_clear_time_seconds_format, time)
+        }
+    }
 
     DropDownMenuWidget(
         icon = AppIcons.Timer,
         title = stringResource(id = R.string.installer_settings_auto_clear_success_notification),
         description = descriptionText,
         choice = selectedIndex,
-        data = displayStrings,
+        data = dropdownItems,
         onChoiceChange = { newIndex ->
-            val newValue = options.getOrElse(newIndex) { 0 } // Safe access
+            val newValue = options.getOrElse(newIndex) { 0 }
             if (currentValue != newValue) {
                 onValueChange(newValue)
             }
@@ -427,13 +433,18 @@ fun AutoLockInstaller(
 }
 
 @Composable
-fun DefaultInstaller(lock: Boolean, onClick: () -> Unit) {
+fun DefaultInstaller(
+    lock: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
     BaseWidget(
         icon = if (lock) AppIcons.LockDefault else AppIcons.UnlockDefault,
         title =
             stringResource(if (lock) R.string.lock_default_installer else R.string.unlock_default_installer),
         description =
             stringResource(if (lock) R.string.lock_default_installer_desc else R.string.unlock_default_installer_desc),
+        enabled = enabled,
         onClick = onClick
     ) {}
 }
@@ -605,7 +616,7 @@ fun SelectableSettingItem(
 fun BottomSheetContent(
     title: String,
     hasUpdate: Boolean,
-    canDirectUpdate: Boolean,
+    canDirectUpdate: Boolean = true,
     onDirectUpdateClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -946,6 +957,7 @@ fun LabRootImplementationWidget(viewModel: PreferredViewModel) {
     val selectedIndex = keys.indexOf(currentRootImpl).coerceAtLeast(0)
 
     DropDownMenuWidget(
+        icon = AppIcons.RootMethod,
         title = stringResource(R.string.lab_module_select_root_impl),
         description = options.getOrNull(selectedIndex),
         choice = selectedIndex,
@@ -1142,4 +1154,70 @@ private fun DeleteSharedUidConfirmationDialog(
             }
         }
     )
+}
+
+@Composable
+fun UninstallKeepDataWidget(viewModel: PreferredViewModel, isM3E: Boolean = true) {
+    SwitchWidget(
+        icon = AppIcons.Save,
+        title = stringResource(id = R.string.uninstall_keep_data),
+        description = stringResource(id = R.string.uninstall_keep_data_desc),
+        checked = (viewModel.state.uninstallFlags and PackageManagerUtil.DELETE_KEEP_DATA) != 0,
+        onCheckedChange = {
+            viewModel.dispatch(PreferredViewAction.ToggleGlobalUninstallFlag(PackageManagerUtil.DELETE_KEEP_DATA, it))
+        },
+        isM3E = isM3E
+    )
+}
+
+@Composable
+fun UninstallForAllUsersWidget(viewModel: PreferredViewModel, isM3E: Boolean = true) {
+    SwitchWidget(
+        icon = AppIcons.InstallForAllUsers,
+        title = stringResource(id = R.string.uninstall_all_users),
+        description = stringResource(id = R.string.uninstall_all_users_desc),
+        checked = (viewModel.state.uninstallFlags and PackageManagerUtil.DELETE_ALL_USERS) != 0,
+        onCheckedChange = {
+            viewModel.dispatch(PreferredViewAction.ToggleGlobalUninstallFlag(PackageManagerUtil.DELETE_ALL_USERS, it))
+        },
+        isM3E = isM3E
+    )
+}
+
+@Composable
+fun UninstallSystemAppWidget(viewModel: PreferredViewModel, isM3E: Boolean = true) {
+    SwitchWidget(
+        icon = AppIcons.BugReport,
+        title = stringResource(id = R.string.uninstall_delete_system_app),
+        description = stringResource(id = R.string.uninstall_delete_system_app_desc),
+        checked = (viewModel.state.uninstallFlags and PackageManagerUtil.DELETE_SYSTEM_APP) != 0,
+        onCheckedChange = {
+            viewModel.dispatch(
+                PreferredViewAction.ToggleGlobalUninstallFlag(
+                    PackageManagerUtil.DELETE_SYSTEM_APP,
+                    it
+                )
+            )
+        },
+        isM3E = isM3E
+    )
+}
+
+@Composable
+fun UninstallRequireBiometricAuthWidget(viewModel: PreferredViewModel, isM3E: Boolean = true) {
+    if (BiometricManager
+            .from(LocalContext.current)
+            .canAuthenticate(BIOMETRIC_WEAK or BIOMETRIC_STRONG or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+    ) {
+        SwitchWidget(
+            icon = AppIcons.BiometricAuth,
+            title = stringResource(R.string.uninstaller_settings_require_biometric_auth),
+            description = stringResource(R.string.uninstaller_settings_require_biometric_auth_desc),
+            checked = viewModel.state.uninstallerRequireBiometricAuth,
+            isM3E = isM3E,
+            onCheckedChange = {
+                viewModel.dispatch(PreferredViewAction.ChangeBiometricAuth(it, false))
+            }
+        )
+    }
 }

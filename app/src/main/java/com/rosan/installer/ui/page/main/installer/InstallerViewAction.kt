@@ -10,9 +10,25 @@ sealed class InstallerViewAction {
     data object InstallChoice : InstallerViewAction()
     data object InstallExtendedMenu : InstallerViewAction()
     data object InstallExtendedSubMenu : InstallerViewAction()
+
+    /**
+     * Install multiple module/apk
+     *
+     * **This ViewAction will forward to ActionHandler to actually process**
+     * @see com.rosan.installer.data.installer.model.impl.InstallerRepoImpl.Action.InstallMultiple
+     */
     data object InstallMultiple : InstallerViewAction()
     data object InstallPrepare : InstallerViewAction()
-    data object Install : InstallerViewAction()
+
+    /**
+     * Install single module/apk
+     *
+     * **This ViewAction will forward to ActionHandler to actually process**
+     *
+     * @param triggerAuth request or not request user biometric auth
+     * @see com.rosan.installer.data.installer.model.impl.InstallerRepoImpl.Action.Install
+     */
+    data class Install(val triggerAuth: Boolean) : InstallerViewAction()
     data object Background : InstallerViewAction()
     data object Cancel : InstallerViewAction()
     data class Reboot(val reason: String) : InstallerViewAction()
@@ -59,6 +75,7 @@ sealed class InstallerViewAction {
     /**
      * Triggers the uninstallation process with the option to keep data.
      * @param keepData true to keep data, false to delete it.
+     * @param conflictingPackage The package name of the conflicting app, if any.
      */
-    data class UninstallAndRetryInstall(val keepData: Boolean) : InstallerViewAction()
+    data class UninstallAndRetryInstall(val keepData: Boolean, val conflictingPackage: String? = null) : InstallerViewAction()
 }
